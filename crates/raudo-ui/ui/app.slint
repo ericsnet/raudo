@@ -329,16 +329,6 @@ component TabView inherits Rectangle {
 }
 
 export component AppWindow inherits Window {
-    // Initial size plus resizing: the properties follow the OS size, so the
-    // layout never shrinks the window back after a click or a maximization.
-    in-out property <length> window-width: 1280px;
-    in-out property <length> window-height: 800px;
-
-    width: window-width;
-    height: window-height;
-    changed width => { root.window-width = root.width; }
-    changed height => { root.window-height = root.height; }
-
     in property <string> current-path;
     in property <[Row]> rows;
     in property <[Crumb]> crumbs;
@@ -374,6 +364,7 @@ export component AppWindow inherits Window {
     callback search-changed(string);
 
     title: "Raudo";
+    icon: @image-url("../assets/icons/app.svg");
     background: #131519;
 
     Rectangle {
@@ -396,6 +387,9 @@ export component AppWindow inherits Window {
     }
 
     VerticalLayout {
+        width: parent.width;
+        height: parent.height;
+
         // ── Tab strip ────────────────────────────────────────────
         Rectangle {
             height: 40px;

@@ -96,6 +96,19 @@ pub fn run(
 
     ui.show()?;
 
+    // Slint marks the window as fixed-size when width/height are bound in the
+    // .slint, which removes the OS maximize button. With no bindings the window
+    // is resizable; the preferred size is requested once the layout has settled.
+    let weak = ui.as_weak();
+    slint::Timer::single_shot(std::time::Duration::from_millis(300), move || {
+        if let Some(ui) = weak.upgrade() {
+            ui.window()
+                .set_size(slint::WindowSize::Logical(slint::LogicalSize::new(
+                    1280.0, 800.0,
+                )));
+        }
+    });
+
     if let Some(path) = trace {
         let _ = std::fs::write(
             path,
