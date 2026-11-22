@@ -43,9 +43,11 @@ export struct Row {
     meta: string,
     date: string,
     type-text: string,
+    label-text: string,
+    state-text: string,
     is-dir: bool,
     path: string,
-    icon: image,
+    kind: string,
 }
 
 export struct Crumb {
@@ -63,13 +65,12 @@ export struct Drive {
     detail: string,
     usage: float,
     root: string,
-    icon: image,
 }
 
 export struct NavItem {
     label: string,
     path: string,
-    icon: image,
+    kind: string,
 }
 
 component ToolButton inherits Rectangle {
@@ -115,7 +116,7 @@ component ToolButton inherits Rectangle {
 
 component NavEntry inherits Rectangle {
     in property <string> label;
-    in property <image> icon;
+    in property <string> kind;
     in property <bool> active;
     callback clicked();
 
@@ -139,11 +140,10 @@ component NavEntry inherits Rectangle {
             width: 16px;
             background: transparent;
 
-            Image {
-                source: root.icon;
+            KindIcon {
+                kind: root.kind;
                 width: 16px;
                 height: 16px;
-                y: (parent.height - self.height) / 2;
             }
         }
 
@@ -188,11 +188,10 @@ component DriveCard inherits Rectangle {
                 width: 20px;
                 background: transparent;
 
-                Image {
-                    source: root.drive.icon;
+                KindIcon {
+                    kind: "drive";
                     width: 20px;
                     height: 20px;
-                    y: (parent.height - self.height) / 2;
                 }
             }
 
@@ -237,14 +236,16 @@ component FileRow inherits Rectangle {
     in property <string> meta;
     in property <string> date;
     in property <string> type-text;
+    in property <string> label-text;
+    in property <string> state-text;
     in property <bool> is-dir;
     in property <bool> selected;
     in property <bool> search-mode;
-    in property <image> icon;
+    in property <string> kind;
     callback select();
     callback activate();
 
-    height: 34px;
+    height: 38px;
     background: root.selected ? #2d3a4e : (row-touch.has-hover ? rgba(40, 46, 54, 0.72) : transparent);
 
     HorizontalLayout {
@@ -256,8 +257,8 @@ component FileRow inherits Rectangle {
             width: 22px;
             background: transparent;
 
-            Image {
-                source: root.icon;
+            KindIcon {
+                kind: root.kind;
                 width: 20px;
                 height: 20px;
                 y: (parent.height - self.height) / 2;
@@ -267,26 +268,37 @@ component FileRow inherits Rectangle {
         Text {
             text: root.file-name;
             color: root.is-dir ? #edf1f6 : #c9cfd6;
+            font-size: 14px;
             horizontal-stretch: 1;
             vertical-alignment: center;
             overflow: elide;
         }
 
         Text {
-            width: root.search-mode ? 300px : 150px;
+            width: 100px;
+            text: root.label-text;
+            color: #8b929a;
+            font-size: 13px;
+            vertical-alignment: center;
+            overflow: elide;
+            visible: !root.search-mode;
+        }
+
+        Text {
+            width: root.search-mode ? 300px : 160px;
             text: root.search-mode ? root.meta : root.date;
             color: #8b929a;
-            font-size: 12px;
+            font-size: 13px;
             horizontal-alignment: right;
             vertical-alignment: center;
             overflow: elide;
         }
 
         Text {
-            width: 190px;
+            width: 180px;
             text: root.type-text;
             color: #8b929a;
-            font-size: 12px;
+            font-size: 13px;
             vertical-alignment: center;
             overflow: elide;
             visible: !root.search-mode;
@@ -296,9 +308,19 @@ component FileRow inherits Rectangle {
             width: 90px;
             text: root.search-mode ? "" : root.meta;
             color: #8b929a;
-            font-size: 12px;
+            font-size: 13px;
             horizontal-alignment: right;
             vertical-alignment: center;
+        }
+
+        Text {
+            width: 70px;
+            text: root.state-text;
+            color: #8b929a;
+            font-size: 13px;
+            vertical-alignment: center;
+            overflow: elide;
+            visible: !root.search-mode;
         }
     }
 
@@ -464,6 +486,8 @@ export component AppWindow inherits Window {
 
     title: "Raudo";
     icon: @image-url("../assets/icons/app.svg");
+    default-font-family: "Segoe UI Variable Text";
+    default-font-size: 14px;
     // Slint derives the window's maximum size from the layout, which caps it
     // at the content's minimum width and makes the OS clip the window.
     max-width: 100000px;
@@ -730,7 +754,7 @@ export component AppWindow inherits Window {
 
                         NavEntry {
                             label: "Inicio";
-                            icon: Icons.home;
+                            kind: "home";
                             active: root.is-home;
                             clicked => { root.go-home(); }
                         }
@@ -741,7 +765,7 @@ export component AppWindow inherits Window {
 
                         for item in root.pinned : NavEntry {
                             label: item.label;
-                            icon: item.icon;
+                            kind: item.kind;
                             active: root.current-path == item.path;
                             clicked => { root.open-drive(item.path); }
                         }
@@ -752,7 +776,7 @@ export component AppWindow inherits Window {
 
                         for drive in root.drives : NavEntry {
                             label: drive.letter + "  " + drive.label;
-                            icon: drive.icon;
+                            kind: "drive";
                             active: root.current-path == drive.root;
                             clicked => { root.open-drive(drive.root); }
                         }
@@ -895,7 +919,7 @@ export component AppWindow inherits Window {
                                 Text {
                                     text: root.sort-key == 0 ? (root.sort-dir == 0 ? "Nombre ↑" : "Nombre ↓") : "Nombre";
                                     color: root.sort-key == 0 ? #a8c6f5 : #8b929a;
-                                    font-size: 11px;
+                                    font-size: 12px;
                                     width: parent.width;
                                     horizontal-alignment: left;
                                     vertical-alignment: center;
@@ -907,13 +931,26 @@ export component AppWindow inherits Window {
                             }
 
                             Rectangle {
-                                width: root.search-mode ? 300px : 150px;
+                                width: 100px;
+                                background: transparent;
+                                visible: !root.search-mode;
+
+                                Text {
+                                    text: "Etiqueta";
+                                    color: #8b929a;
+                                    font-size: 12px;
+                                    vertical-alignment: center;
+                                }
+                            }
+
+                            Rectangle {
+                                width: root.search-mode ? 300px : 160px;
                                 background: transparent;
 
                                 Text {
                                     text: root.search-mode ? "Ubicación" : (root.sort-key == 2 ? (root.sort-dir == 0 ? "Fecha de modificación ↑" : "Fecha de modificación ↓") : "Fecha de modificación");
                                     color: root.sort-key == 2 && !root.search-mode ? #a8c6f5 : #8b929a;
-                                    font-size: 11px;
+                                    font-size: 12px;
                                     horizontal-alignment: right;
                                     vertical-alignment: center;
                                     overflow: elide;
@@ -925,14 +962,14 @@ export component AppWindow inherits Window {
                             }
 
                             Rectangle {
-                                width: 190px;
+                                width: 180px;
                                 background: transparent;
                                 visible: !root.search-mode;
 
                                 Text {
                                     text: "Tipo";
                                     color: #8b929a;
-                                    font-size: 11px;
+                                    font-size: 12px;
                                     vertical-alignment: center;
                                 }
                             }
@@ -945,13 +982,26 @@ export component AppWindow inherits Window {
                                 Text {
                                     text: root.sort-key == 1 ? (root.sort-dir == 0 ? "Tamaño ↑" : "Tamaño ↓") : "Tamaño";
                                     color: root.sort-key == 1 ? #a8c6f5 : #8b929a;
-                                    font-size: 11px;
+                                    font-size: 12px;
                                     horizontal-alignment: right;
                                     vertical-alignment: center;
                                 }
 
                                 TouchArea {
                                     clicked => { root.sort-by(1); }
+                                }
+                            }
+
+                            Rectangle {
+                                width: 70px;
+                                background: transparent;
+                                visible: !root.search-mode;
+
+                                Text {
+                                    text: "Estado";
+                                    color: #8b929a;
+                                    font-size: 12px;
+                                    vertical-alignment: center;
                                 }
                             }
                         }
@@ -974,8 +1024,10 @@ export component AppWindow inherits Window {
                             meta: row.meta;
                             date: row.date;
                             type-text: row.type-text;
+                            label-text: row.label-text;
+                            state-text: row.state-text;
                             is-dir: row.is-dir;
-                            icon: row.icon;
+                            kind: row.kind;
                             selected: i == root.selected-index;
                             search-mode: root.search-mode;
                             select => { root.select-row(i); }

@@ -165,5 +165,42 @@ mod tests {
         assert_eq!(folder.pixels.len(), 32 * 32 * 4);
         assert!(icon("txt").is_some());
         assert!(icon("exe").is_some());
+
+        let mut transparent = 0;
+        let mut opaque = 0;
+        let mut black_opaque = 0;
+        let mut white_opaque = 0;
+        for pixel in folder.pixels.chunks_exact(4) {
+            if pixel[3] == 0 {
+                transparent += 1;
+            } else {
+                opaque += 1;
+                if pixel[0] < 8 && pixel[1] < 8 && pixel[2] < 8 {
+                    black_opaque += 1;
+                }
+                if pixel[0] > 240 && pixel[1] > 240 && pixel[2] > 240 {
+                    white_opaque += 1;
+                }
+            }
+        }
+        println!(
+            "transparent={transparent} opaque={opaque} black={black_opaque} white={white_opaque}"
+        );
+        for key in ["txt", "exe", "png", "lnk"] {
+            if let Some(ic) = icon(key) {
+                let mut t = 0;
+                let mut b = 0;
+                for p in ic.pixels.chunks_exact(4) {
+                    if p[3] == 0 {
+                        t += 1
+                    } else if p[0] < 8 && p[1] < 8 && p[2] < 8 {
+                        b += 1
+                    }
+                }
+                println!("{key}: transparent={t} black={b}");
+            }
+        }
+        println!("corner={:?}", &folder.pixels[0..4]);
+        assert!(transparent > 0, "folder icon must have transparent pixels");
     }
 }

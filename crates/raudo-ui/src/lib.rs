@@ -7,8 +7,6 @@ slint::include_modules!();
 
 pub use slint::PlatformError;
 
-use std::cell::RefCell;
-use std::collections::HashMap;
 use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -141,34 +139,8 @@ impl Drive {
             .into(),
             usage,
             root: info.root.as_str().into(),
-            icon: icon_image("drive"),
         }
     }
-}
-
-thread_local! {
-    static ICON_CACHE: RefCell<HashMap<String, slint::Image>> = RefCell::new(HashMap::new());
-}
-
-/// Converts a shell icon into a Slint image, cached per extension/type.
-fn icon_image(key: &str) -> slint::Image {
-    ICON_CACHE.with(|cache| {
-        if let Some(image) = cache.borrow().get(key) {
-            return image.clone();
-        }
-        let image = raudo_core::icons::icon(key)
-            .map(|shell| {
-                let buffer = slint::SharedPixelBuffer::<slint::Rgba8Pixel>::clone_from_slice(
-                    &shell.pixels,
-                    shell.width,
-                    shell.height,
-                );
-                slint::Image::from_rgba8_premultiplied(buffer)
-            })
-            .unwrap_or_default();
-        cache.borrow_mut().insert(key.to_string(), image.clone());
-        image
-    })
 }
 
 fn active_index(state: &Shared) -> usize {
@@ -609,18 +581,12 @@ fn wire_callbacks(ui: &AppWindow, state: &Shared) {
                 return;
             };
             let path = PathBuf::from(row.path.as_str());
-            // A folder opens itself; a file opens the folder that contains it
-            // (opening the file arrives in Fase 2).
-            let target = if row.is_dir {
-                Some(path)
+            if row.is_dir {
+                let tab_index = state.lock().unwrap().active;
+                navigate(&ui, &state, tab_index, Some(path), NavMode::Push);
             } else {
-                path.parent().map(Path::to_path_buf)
-            };
-            let Some(target) = target else {
-                return;
-            };
-            let tab_index = state.lock().unwrap().active;
-            navigate(&ui, &state, tab_index, Some(target), NavMode::Push);
+                raudo_core::shell::open(&path);
+            }
         }
     });
 
@@ -804,9 +770,32 @@ fn row_for(entry: &Entry, folder: &Path, show_folder: Option<&Path>) -> Row {
         meta: meta.into(),
         date: entry.modified_text.as_str().into(),
         type_text: type_text(entry).into(),
+        label_text: String::new().into(),
+        state_text: String::new().into(),
         is_dir: entry.is_dir,
         path: folder.join(&entry.name).display().to_string().into(),
-        icon: icon_image(icon_key(&entry.name, entry.is_dir)),
+        kind: kind_for(&entry.name, entry.is_dir).into(),
+    }
+}
+
+fn kind_for(name: &str, is_dir: bool) -> &'static str {
+    if is_dir {
+        return "folder";
+    }
+    let extension = name
+        .rsplit_once('.')
+        .map(|(_, ext)| ext.to_ascii_lowercase())
+        .unwrap_or_default();
+    match extension.as_str() {
+        "exe" | "msi" | "bat" | "cmd" | "ps1" => "exe",
+        "png" | "jpg" | "jpeg" | "gif" | "bmp" | "webp" | "svg" | "ico" | "tif" | "tiff" => "image",
+        "mp3" | "wav" | "flac" | "ogg" | "m4a" | "aac" | "wma" => "audio",
+        "mp4" | "mkv" | "avi" | "mov" | "wmv" | "webm" | "m4v" => "video",
+        "zip" | "rar" | "7z" | "tar" | "gz" | "bz2" | "xz" | "iso" => "archive",
+        "rs" | "js" | "ts" | "tsx" | "jsx" | "py" | "c" | "h" | "cpp" | "hpp" | "cs" | "java"
+        | "go" | "rb" | "php" | "html" | "css" | "scss" | "json" | "toml" | "yaml" | "yml"
+        | "xml" | "sh" | "md" => "code",
+        _ => "file",
     }
 }
 
@@ -836,16 +825,6 @@ fn type_text(entry: &Entry) -> String {
         "" => "Archivo".to_string(),
         other => format!("Archivo .{other}"),
     }
-}
-
-fn icon_key(name: &str, is_dir: bool) -> &str {
-    if is_dir {
-        return "dir";
-    }
-    name.rsplit_once('.')
-        .map(|(_, ext)| ext)
-        .filter(|ext| !ext.is_empty())
-        .unwrap_or("file")
 }
 
 fn tab_title(path: Option<&Path>) -> String {
@@ -890,10 +869,20 @@ fn crumbs(path: &Path) -> Vec<Crumb> {
 fn pinned_items() -> Vec<NavItem> {
     let mut items: Vec<NavItem> = raudo_core::known_folders()
         .into_iter()
-        .map(|folder| NavItem {
-            label: folder.label.into(),
-            path: path_text(&folder.path).into(),
-            icon: icon_image("dir"),
+        .map(|folder| {
+            let kind = match folder.label.as_str() {
+                "Descargas" => "download",
+                "Documentos" => "document",
+                "Imágenes" => "image",
+                "Música" => "audio",
+                "Vídeos" => "video",
+                _ => "folder",
+            };
+            NavItem {
+                label: folder.label.into(),
+                path: path_text(&folder.path).into(),
+                kind: kind.into(),
+            }
         })
         .collect();
 
@@ -903,7 +892,7 @@ fn pinned_items() -> Vec<NavItem> {
             items.push(NavItem {
                 label: "Proyectos".into(),
                 path: path_text(&projects).into(),
-                icon: icon_image("dir"),
+                kind: "folder".into(),
             });
         }
         let icons = home.join("Iconos");
@@ -911,7 +900,7 @@ fn pinned_items() -> Vec<NavItem> {
             items.push(NavItem {
                 label: "Iconos".into(),
                 path: path_text(&icons).into(),
-                icon: icon_image("dir"),
+                kind: "folder".into(),
             });
         }
     }
@@ -919,7 +908,7 @@ fn pinned_items() -> Vec<NavItem> {
     items.push(NavItem {
         label: "Papelera de reciclaje".into(),
         path: "C:\\$Recycle.Bin".into(),
-        icon: icon_image("dir"),
+        kind: "folder".into(),
     });
 
     items
