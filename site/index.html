@@ -187,8 +187,8 @@
                   <h1>El explorador de archivos que abre al instante.</h1>
                   <p class="hero-lead">
                     Raudo lee el disco directamente por Win32 y dibuja la lista con Slint,
-                    sin pedirle cada carpeta al shell de Windows. Está escrito en Rust y
-                    solo ocupa 10,2 MB.
+                    sin pedirle cada carpeta al shell de Windows. Está escrito en Rust y no
+                    necesita instalador.
                   </p>
                   <div class="hero-actions">
                     <a class="btn btn-gold" href="https://github.com/ericsnet/raudo/releases/latest/download/raudo.exe">
@@ -342,7 +342,7 @@
                       <span class="f-icon"><svg class="ico" aria-hidden="true"><use href="#i-monitor" /></svg></span>
                       <h3>Ligero</h3>
                     </div>
-                    <p>78,9 MB en reposo y un binario release de 10,2 MB, frente a los 384 MB de Files 4.1.1. Sin .NET, sin WebView, sin instalador.</p>
+                    <p>78,9 MB en reposo frente a los 384 MB de Files 4.1.1. Sin .NET, sin WebView y sin instalador: un ejecutable que se abre con doble clic.</p>
                   </li>
                   <li>
                     <div class="f-head">
@@ -369,7 +369,6 @@
                       <tr><th scope="row">RAM en reposo</th><td>384 MB</td><td class="is-best">78,9 MB</td><td class="is-dim">1.080 MB¹</td></tr>
                       <tr><th scope="row">5.033 entradas (System32)</th><td class="is-dim">—</td><td class="is-best">5,99 ms</td><td class="is-dim">no medible¹</td></tr>
                       <tr><th scope="row">24.896 entradas (WinSxS)</th><td class="is-dim">—</td><td class="is-best">47,27 ms</td><td class="is-dim">no medible¹</td></tr>
-                      <tr><th scope="row">Binario release</th><td class="is-dim">—</td><td class="is-best">10,2 MB</td><td class="is-dim">—</td></tr>
                     </tbody>
                   </table>
                 </div>
@@ -379,7 +378,7 @@
                   contexto, no comparación directa.
                 </p>
                 <p class="links">
-                  <a href="https://github.com/ericsnet/raudo#rendimiento-medido">Método y limitaciones <svg class="ico" aria-hidden="true"><use href="#i-arrow-right" /></svg></a>
+                  <a href="https://github.com/ericsnet/raudo#rendimiento-medido-windows-11-26200-rust-1981">Método y limitaciones <svg class="ico" aria-hidden="true"><use href="#i-arrow-right" /></svg></a>
                   <a href="https://github.com/ericsnet/raudo">Código fuente <svg class="ico" aria-hidden="true"><use href="#i-arrow-right" /></svg></a>
                 </p>
               </div>
@@ -390,7 +389,7 @@
               <div class="release-sheet">
                 <div class="release-main">
                   <h2>Última versión publicada</h2>
-                  <p class="release-version">0.1.0</p>
+                  <p class="release-version">0.1.1</p>
                   <ul class="release-meta">
                     <li>Windows x64</li>
                     <li>11,1 MiB</li>
@@ -401,22 +400,18 @@
                       <svg class="ico" aria-hidden="true"><use href="#i-download" /></svg>
                       Descargar raudo.exe
                     </a>
-                    <a class="btn btn-quiet" href="https://github.com/ericsnet/raudo/releases/tag/v0.1.0">Ver la release</a>
+                    <a class="btn btn-quiet" href="https://github.com/ericsnet/raudo/releases/tag/v0.1.1">Ver la release</a>
                   </div>
                   <p class="micro">
                     Incluye <code>raudo.exe</code> y <code>raudo.exe.sha256</code>. El binario no está firmado,
                     así que SmartScreen puede pedir confirmación la primera vez.
                   </p>
-                  <p class="micro">
-                    La 0.1.1 ya está en <code>main</code>; se publicará como release con su <code>raudo.exe</code>
-                    y su hash.
-                  </p>
                 </div>
 
                 <div class="release-verify">
                   <p class="verify-label">SHA-256 de raudo.exe</p>
-                  <code class="hash">e2a84b5104dcb827809fa396afe28334c61362d68403fa09ecaa73759c9ce1d2</code>
-                  <button class="btn copy-btn" type="button" data-copy="e2a84b5104dcb827809fa396afe28334c61362d68403fa09ecaa73759c9ce1d2" data-copied="Copiado">
+                  <code class="hash">725d6d50f7cc1883b9c5e7479464d9124872ff4ead98ed0a2aa45a8da13ef322</code>
+                  <button class="btn copy-btn" type="button" data-copy="725d6d50f7cc1883b9c5e7479464d9124872ff4ead98ed0a2aa45a8da13ef322" data-copied="Copiado">
                     <svg class="ico" aria-hidden="true"><use href="#i-copy" /></svg>
                     <span>Copiar</span>
                   </button>
@@ -477,24 +472,25 @@
                   <article class="note is-open">
                     <header class="note-head">
                       <div>
-                        <span class="note-badge">En <code>main</code></span>
+                        <span class="note-badge note-badge-solid">Publicada</span>
                         <h3>0.1.1</h3>
                       </div>
-                      <p class="note-meta">Pendiente de release</p>
+                      <p class="note-meta"><time datetime="2026-11-22">22 nov 2026</time></p>
                     </header>
                     <ul class="note-list">
-                      <li>Los <strong>archivos ocultos</strong> quedan fuera del listado por defecto, como en el Explorador.</li>
-                      <li>Botón <code>Ocultos</code> en la barra de acciones; al mostrarlos, el nombre va atenuado y la columna <code>Estado</code> dice <code>Oculto</code>.</li>
-                      <li>Clic derecho → <strong>Ocultar o mostrar elemento</strong> aplica el atributo con <code>SetFileAttributesW</code>, conservando el resto.</li>
-                      <li>El filtro también afecta a los resultados de búsqueda.</li>
-                      <li><code>RAUDO_SHOW_HIDDEN=1</code> arranca con los ocultos a la vista.</li>
+                      <li><strong>Menú contextual propio</strong>, con el estilo de la aplicación: abrir, abrir con, copiar ruta, renombrar, eliminar, ocultar o mostrar, anclar al panel, nueva carpeta, terminal y propiedades.</li>
+                      <li><strong>Barra de acciones</strong> al estilo del Explorador moderno: Inicio, <code>+ Nuevo</code>, edición con icono y el interruptor <code>Ocultos</code>.</li>
+                      <li><strong>Barra de direcciones editable</strong>: acepta rutas como <code>E:\Raudo</code> y también <code>cmd</code>, <code>powershell</code>, <code>pwsh</code> y <code>explorer</code>, que se abren en la carpeta actual.</li>
+                      <li><strong>Archivos ocultos</strong> fuera de la lista por defecto, con nombre atenuado y columna <code>Estado</code> al mostrarlos.</li>
+                      <li><strong>Carpetas anclables</strong> al panel lateral, con persistencia entre sesiones.</li>
+                      <li><strong>Doble clic abre archivos</strong> con la aplicación predeterminada; tipografía a 14 px y filas de 38 px.</li>
                     </ul>
                   </article>
 
                   <article class="note">
                     <header class="note-head">
                       <div>
-                        <span class="note-badge note-badge-solid">Publicada</span>
+                        <span class="note-badge">Anterior</span>
                         <h3>0.1.0</h3>
                       </div>
                       <p class="note-meta"><time datetime="2026-11-22">22 nov 2026</time></p>
@@ -537,14 +533,14 @@
                     <tr><th scope="col">Versión</th><th scope="col">Fecha</th><th scope="col">SHA-256</th><th scope="col">Release</th></tr>
                   </thead>
                   <tbody id="versions-body">
-                    <tr data-search="0.1.1 2026-11-22 main repositorio notas">
-                      <th scope="row"><a href="https://github.com/ericsnet/raudo/blob/main/docs/releases/v0.1.1.md">0.1.1</a> <span class="tag">en main</span></th>
+                    <tr class="is-latest" data-search="0.1.1 2026-11-22 725d6d50f7cc1883b9c5e7479464d9124872ff4ead98ed0a2aa45a8da13ef322 release">
+                      <th scope="row"><span class="current">actual</span><a href="https://github.com/ericsnet/raudo/blob/main/docs/releases/v0.1.1.md">0.1.1</a></th>
                       <td><time datetime="2026-11-22">22 nov 2026</time></td>
-                      <td><code class="tiny">sin publicar</code></td>
-                      <td><span class="tiny">pendiente</span></td>
+                      <td><code class="tiny">725d6d50…3ef322</code></td>
+                      <td><a href="https://github.com/ericsnet/raudo/releases/tag/v0.1.1">v0.1.1</a></td>
                     </tr>
-                    <tr class="is-latest" data-search="0.1.0 2026-11-22 e2a84b5104dcb827809fa396afe28334c61362d68403fa09ecaa73759c9ce1d2 release">
-                      <th scope="row"><span class="current">actual</span><a href="https://github.com/ericsnet/raudo/blob/main/docs/releases/v0.1.0.md">0.1.0</a></th>
+                    <tr data-search="0.1.0 2026-11-22 e2a84b5104dcb827809fa396afe28334c61362d68403fa09ecaa73759c9ce1d2 release">
+                      <th scope="row"><a href="https://github.com/ericsnet/raudo/blob/main/docs/releases/v0.1.0.md">0.1.0</a></th>
                       <td><time datetime="2026-11-22">22 nov 2026</time></td>
                       <td><code class="tiny">e2a84b51…9ce1d2</code></td>
                       <td><a href="https://github.com/ericsnet/raudo/releases/tag/v0.1.0">v0.1.0</a></td>
