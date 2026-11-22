@@ -45,23 +45,11 @@ pub fn icon(key: &str) -> Option<ShellIcon> {
 fn extract(key: &str) -> Option<ShellIcon> {
     let mut info = SHFILEINFOW::default();
     let flags = SHGFI_ICON | SHGFI_LARGEICON;
-    let attributes;
-    let path;
-
-    match key {
-        "dir" => {
-            path = "folder".to_string();
-            attributes = 0x0000_0010; // FILE_ATTRIBUTE_DIRECTORY
-        }
-        "drive" => {
-            path = "C:\\".to_string();
-            attributes = 0x0000_0080; // FILE_ATTRIBUTE_NORMAL
-        }
-        extension => {
-            path = format!("file.{extension}");
-            attributes = 0x0000_0080;
-        }
-    }
+    let (path, attributes) = match key {
+        "dir" => ("folder".to_string(), 0x0000_0010u32), // FILE_ATTRIBUTE_DIRECTORY
+        "drive" => ("C:\\".to_string(), 0x0000_0080u32), // FILE_ATTRIBUTE_NORMAL
+        extension => (format!("file.{extension}"), 0x0000_0080u32),
+    };
 
     let wide: Vec<u16> = path.encode_utf16().chain(std::iter::once(0)).collect();
     let use_attributes = key != "drive";
@@ -103,14 +91,16 @@ fn rasterize(hicon: windows::Win32::UI::WindowsAndMessaging::HICON) -> Option<Sh
             return None;
         }
 
-        let mut info: BITMAPINFO = std::mem::zeroed();
-        info.bmiHeader = BITMAPINFOHEADER {
-            biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
-            biWidth: SIZE,
-            biHeight: -SIZE,
-            biPlanes: 1,
-            biBitCount: 32,
-            biCompression: BI_RGB.0,
+        let info = BITMAPINFO {
+            bmiHeader: BITMAPINFOHEADER {
+                biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
+                biWidth: SIZE,
+                biHeight: -SIZE,
+                biPlanes: 1,
+                biBitCount: 32,
+                biCompression: BI_RGB.0,
+                ..Default::default()
+            },
             ..Default::default()
         };
 
@@ -135,7 +125,8 @@ fn rasterize(hicon: windows::Win32::UI::WindowsAndMessaging::HICON) -> Option<Sh
         let count = (SIZE * SIZE * 4) as usize;
         let source = std::slice::from_raw_parts(bits as *const u8, count);
         let mut pixels = Vec::with_capacity(count);
-        for pixel in source.chunks_exact(4) {
+        for index in (0..count).step_by(4) {
+            let pixel = &source[index..index + 4];
             let (blue, green, red, alpha) = (pixel[0], pixel[1], pixel[2], pixel[3]);
             // Many shell icons come without an alpha channel: the colour is
             // valid but alpha is 0. Treat opaque colour as opaque.

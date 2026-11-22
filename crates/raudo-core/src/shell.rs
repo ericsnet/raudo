@@ -57,10 +57,12 @@ pub fn delete_to_recycle_bin(path: &Path) -> Result<(), u32> {
     from.push(0);
     from.push(0);
 
-    let mut operation = SHFILEOPSTRUCTW::default();
-    operation.wFunc = FO_DELETE;
-    operation.pFrom = windows::core::PCWSTR(from.as_ptr());
-    operation.fFlags = (FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_SILENT).0 as u16;
+    let mut operation = SHFILEOPSTRUCTW {
+        wFunc: FO_DELETE,
+        pFrom: windows::core::PCWSTR(from.as_ptr()),
+        fFlags: (FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_SILENT).0 as u16,
+        ..Default::default()
+    };
 
     // SAFETY: `operation` points at a double NUL-terminated buffer that lives
     // for the whole call.
