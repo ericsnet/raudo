@@ -1,0 +1,16 @@
+[package]
+name = "raudo-app"
+description = "Raudo: a fast file explorer for Windows"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "raudo"
+path = "src/main.rs"
+
+[dependencies]
+raudo-ui = { workspace = true }

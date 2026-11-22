@@ -1,0 +1,15 @@
+[package]
+name = "raudo-core"
+description = "Filesystem, indexing and shell integration for Raudo"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+windows = { workspace = true, features = [
+    "Win32_Foundation",
+    "Win32_Storage_FileSystem",
+] }

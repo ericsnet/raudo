@@ -1,0 +1,33 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/raudo-core",
+    "crates/raudo-ui",
+    "crates/raudo-app",
+    "crates/raudo-bench",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.90"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/ericsnet/raudo"
+authors = ["ericsnet"]
+
+[workspace.dependencies]
+raudo-core = { path = "crates/raudo-core" }
+raudo-ui = { path = "crates/raudo-ui" }
+slint = "1.19"
+slint-build = "1.19"
+windows = "0.62"
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+# Slint benefits a lot from optimized dependencies even in dev builds.
+[profile.dev.package."*"]
+opt-level = 2

@@ -1,0 +1,16 @@
+[package]
+name = "raudo-ui"
+description = "Slint user interface for Raudo"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+raudo-core = { workspace = true }
+slint = { workspace = true }
+
+[build-dependencies]
+slint-build = { workspace = true }

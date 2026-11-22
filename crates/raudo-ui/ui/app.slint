@@ -1,0 +1,140 @@
+// Fase 0 shell. Visual work (backgrounds, icons, context menu) lands in Fase 4.
+
+import { ListView } from "std-widgets.slint";
+
+export struct Row {
+    name: string,
+    meta: string,
+    is-dir: bool,
+}
+
+component NavButton inherits Rectangle {
+    in property <string> label;
+    callback clicked();
+
+    width: 28px;
+    height: 26px;
+    border-radius: 6px;
+    background: nav-touch.has-hover ? #243040 : #1a222b;
+
+    Text {
+        text: root.label;
+        color: #d5dee9;
+        font-size: 14px;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+
+    nav-touch := TouchArea {
+        clicked => { root.clicked(); }
+    }
+}
+
+component FileRow inherits Rectangle {
+    in property <string> file-name;
+    in property <string> meta;
+    in property <bool> is-dir;
+    callback activate();
+
+    height: 26px;
+    background: row-touch.has-hover ? #1b2430 : transparent;
+
+    HorizontalLayout {
+        spacing: 10px;
+        padding-left: 12px;
+        padding-right: 12px;
+
+        Text {
+            width: 12px;
+            text: root.is-dir ? "›" : "";
+            color: #6ea8fe;
+            font-size: 14px;
+            vertical-alignment: center;
+        }
+
+        Text {
+            text: root.file-name;
+            color: root.is-dir ? #e9eff7 : #c4cdd8;
+            horizontal-stretch: 1;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+
+        Text {
+            text: root.meta;
+            color: #75818f;
+            font-size: 12px;
+            vertical-alignment: center;
+            horizontal-alignment: right;
+        }
+    }
+
+    row-touch := TouchArea {
+        double-clicked => { root.activate(); }
+    }
+}
+
+export component AppWindow inherits Window {
+    in property <string> current-path;
+    in property <[Row]> rows;
+    callback open-row(int);
+    callback go-up();
+
+    title: "Raudo";
+    width: 1080px;
+    height: 700px;
+    background: #0f1216;
+
+    VerticalLayout {
+        Rectangle {
+            height: 46px;
+            background: #141a21;
+
+            HorizontalLayout {
+                padding-left: 12px;
+                padding-right: 12px;
+                spacing: 10px;
+
+                NavButton {
+                    label: "↑";
+                    clicked => { root.go-up(); }
+                }
+
+                Text {
+                    text: root.current-path;
+                    color: #cfd8e3;
+                    vertical-alignment: center;
+                    horizontal-stretch: 1;
+                    overflow: elide;
+                }
+
+                Text {
+                    text: root.rows.length + " elementos";
+                    color: #75818f;
+                    font-size: 12px;
+                    vertical-alignment: center;
+                }
+            }
+        }
+
+        Rectangle {
+            background: transparent;
+
+            if root.rows.length == 0 : Text {
+                text: "Carpeta vacía";
+                color: #5f6a78;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+
+            ListView {
+                for row[i] in root.rows : FileRow {
+                    file-name: row.name;
+                    meta: row.meta;
+                    is-dir: row.is-dir;
+                    activate => { root.open-row(i); }
+                }
+            }
+        }
+    }
+}
