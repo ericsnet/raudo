@@ -7,6 +7,7 @@ export struct Row {
     meta: string,
     date: string,
     is-dir: bool,
+    path: string,
 }
 
 export struct Crumb {
@@ -174,6 +175,7 @@ component FileRow inherits Rectangle {
     in property <string> date;
     in property <bool> is-dir;
     in property <bool> selected;
+    in property <bool> search-mode;
     callback select();
     callback activate();
 
@@ -201,12 +203,13 @@ component FileRow inherits Rectangle {
         }
 
         Text {
-            width: 86px;
+            width: root.search-mode ? 330px : 86px;
             text: root.meta;
             color: #8b929a;
             font-size: 12px;
             horizontal-alignment: right;
             vertical-alignment: center;
+            overflow: elide;
         }
 
         Text {
@@ -276,6 +279,16 @@ component TabView inherits Rectangle {
 }
 
 export component AppWindow inherits Window {
+    // Initial size plus resizing: the properties follow the OS size, so the
+    // layout never shrinks the window back after a click or a maximization.
+    in-out property <length> window-width: 1280px;
+    in-out property <length> window-height: 800px;
+
+    width: window-width;
+    height: window-height;
+    changed width => { root.window-width = root.width; }
+    changed height => { root.window-height = root.height; }
+
     in property <string> current-path;
     in property <[Row]> rows;
     in property <[Crumb]> crumbs;
@@ -291,6 +304,8 @@ export component AppWindow inherits Window {
     in property <int> sort-dir: 0;
     in property <int> item-count;
     in property <image> background-image;
+    in property <bool> search-mode;
+    in-out property <string> search-text;
 
     callback select-tab(int);
     callback close-tab(int);
@@ -306,10 +321,9 @@ export component AppWindow inherits Window {
     callback sort-by(int);
     callback open-drive(string);
     callback toggle-fullscreen();
+    callback search-changed(string);
 
     title: "Raudo";
-    min-width: 900px;
-    min-height: 560px;
     background: #131519;
 
     Rectangle {
@@ -468,15 +482,23 @@ export component AppWindow inherits Window {
                     border-radius: 8px;
                     background: #23272d;
 
-                    HorizontalLayout {
-                        padding-left: 10px;
+                    TextInput {
+                        x: 10px;
+                        width: parent.width - 20px;
+                        height: parent.height;
+                        text <=> root.search-text;
+                        color: #d8dde3;
+                        font-size: 12px;
+                        vertical-alignment: center;
+                        edited => { root.search-changed(self.text); }
+                    }
 
-                        Text {
-                            text: "Buscar";
-                            color: #767d85;
-                            font-size: 12px;
-                            vertical-alignment: center;
-                        }
+                    if root.search-text == "" : Text {
+                        x: 10px;
+                        text: "Buscar";
+                        color: #767d85;
+                        font-size: 12px;
+                        vertical-alignment: center;
                     }
                 }
 
@@ -634,12 +656,12 @@ export component AppWindow inherits Window {
                             }
 
                             Rectangle {
-                                width: 86px;
+                                width: root.search-mode ? 330px : 86px;
                                 background: transparent;
 
                                 Text {
-                                    text: root.sort-key == 1 ? (root.sort-dir == 0 ? "Tamaño ↑" : "Tamaño ↓") : "Tamaño";
-                                    color: root.sort-key == 1 ? #a8c6f5 : #8b929a;
+                                    text: root.search-mode ? "Ubicación" : (root.sort-key == 1 ? (root.sort-dir == 0 ? "Tamaño ↑" : "Tamaño ↓") : "Tamaño");
+                                    color: root.sort-key == 1 && !root.search-mode ? #a8c6f5 : #8b929a;
                                     font-size: 11px;
                                     horizontal-alignment: right;
                                     vertical-alignment: center;
@@ -687,6 +709,7 @@ export component AppWindow inherits Window {
                             date: row.date;
                             is-dir: row.is-dir;
                             selected: i == root.selected-index;
+                            search-mode: root.search-mode;
                             select => { root.select-row(i); }
                             activate => { root.open-row(i); }
                         }

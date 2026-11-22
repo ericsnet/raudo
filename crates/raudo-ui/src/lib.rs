@@ -8,10 +8,13 @@ slint::include_modules!();
 pub use slint::PlatformError;
 
 use std::path::{Component, Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-use raudo_core::{Entry, SortDir, SortKey, drives, format_size, list_dir, sort_entries};
+use raudo_core::{
+    Entry, Hit, RESULT_LIMIT, SortDir, SortKey, drives, format_size, list_dir, search, sort_entries,
+};
 use slint::{Model, ModelRc, VecModel};
 
 struct TabState {
@@ -22,6 +25,10 @@ struct TabState {
     sort_key: SortKey,
     sort_dir: SortDir,
     generation: u64,
+    query: String,
+    search_results: Vec<Hit>,
+    search_gen: u64,
+    search_cancel: Option<Arc<AtomicBool>>,
 }
 
 impl TabState {
@@ -34,6 +41,10 @@ impl TabState {
             sort_key: SortKey::Name,
             sort_dir: SortDir::Asc,
             generation: 0,
+            query: String::new(),
+            search_results: Vec::new(),
+            search_gen: 0,
+            search_cancel: None,
         }
     }
 }
@@ -84,18 +95,6 @@ pub fn run(
     navigate(&ui, &state, 0, start, NavMode::Keep);
 
     ui.show()?;
-
-    // The window auto-sizes to the layout; request the preferred size once the
-    // event loop is running so the value is not overwritten by the layout pass.
-    let weak = ui.as_weak();
-    slint::Timer::single_shot(std::time::Duration::from_millis(20), move || {
-        if let Some(ui) = weak.upgrade() {
-            ui.window()
-                .set_size(slint::WindowSize::Logical(slint::LogicalSize::new(
-                    1280.0, 800.0,
-                )));
-        }
-    });
 
     if let Some(path) = trace {
         let _ = std::fs::write(
@@ -339,6 +338,64 @@ fn wire_callbacks(ui: &AppWindow, state: &Shared) {
         }
     });
 
+    ui.on_search_changed({
+        let ui_weak = ui.as_weak();
+        let state = Arc::clone(state);
+        move |text| {
+            let Some(ui) = ui_weak.upgrade() else {
+                return;
+            };
+            let needle = text.trim().to_string();
+            let cancel = Arc::new(AtomicBool::new(false));
+            let (index, root, generation) = {
+                let mut s = state.lock().unwrap();
+                if let Some(previous) = s.active_tab_mut().search_cancel.take() {
+                    previous.store(true, Ordering::Relaxed);
+                }
+                let active = s.active;
+                let tab = s.active_tab_mut();
+                tab.query = text.to_string();
+                tab.search_results.clear();
+                tab.search_gen += 1;
+                tab.search_cancel = Some(Arc::clone(&cancel));
+                (active, tab.path.clone(), tab.search_gen)
+            };
+            render(&ui, &state.lock().unwrap());
+
+            let Some(root) = root else {
+                return;
+            };
+            if needle.is_empty() {
+                return;
+            }
+
+            let weak = ui.as_weak();
+            let st = Arc::clone(&state);
+            std::thread::spawn(move || {
+                search(&root, &needle, RESULT_LIMIT, &cancel, |batch| {
+                    let weak = weak.clone();
+                    let st = Arc::clone(&st);
+                    let _ = slint::invoke_from_event_loop(move || {
+                        let Some(ui) = weak.upgrade() else {
+                            return;
+                        };
+                        {
+                            let mut s = st.lock().unwrap();
+                            let Some(tab) = s.tabs.get_mut(index) else {
+                                return;
+                            };
+                            if tab.search_gen != generation {
+                                return;
+                            }
+                            tab.search_results.extend(batch);
+                        }
+                        render(&ui, &st.lock().unwrap());
+                    });
+                });
+            });
+        }
+    });
+
     ui.on_open_row({
         let ui_weak = ui.as_weak();
         let state = Arc::clone(state);
@@ -349,24 +406,19 @@ fn wire_callbacks(ui: &AppWindow, state: &Shared) {
             let Some(row) = ui.get_rows().row_data(index as usize) else {
                 return;
             };
-            if !row.is_dir {
-                // Opening files arrives in Fase 2.
-                return;
-            }
-            let (tab_index, base) = {
-                let s = state.lock().unwrap();
-                (s.active, s.active_tab().path.clone())
+            let path = PathBuf::from(row.path.as_str());
+            // A folder opens itself; a file opens the folder that contains it
+            // (opening the file arrives in Fase 2).
+            let target = if row.is_dir {
+                Some(path)
+            } else {
+                path.parent().map(Path::to_path_buf)
             };
-            let Some(base) = base else {
+            let Some(target) = target else {
                 return;
             };
-            navigate(
-                &ui,
-                &state,
-                tab_index,
-                Some(base.join(row.name.as_str())),
-                NavMode::Push,
-            );
+            let tab_index = state.lock().unwrap().active;
+            navigate(&ui, &state, tab_index, Some(target), NavMode::Push);
         }
     });
 
@@ -414,10 +466,17 @@ fn navigate(ui: &AppWindow, state: &Shared, index: usize, target: Option<PathBuf
         }
         tab.path = target.clone();
         tab.entries.clear();
+        tab.query.clear();
+        tab.search_results.clear();
+        tab.search_gen += 1;
+        if let Some(cancel) = tab.search_cancel.take() {
+            cancel.store(true, Ordering::Relaxed);
+        }
         tab.generation += 1;
         tab.generation
     };
 
+    ui.set_search_text(String::new().into());
     render(ui, &state.lock().unwrap());
 
     let Some(dir) = target else {
@@ -476,26 +535,39 @@ fn render(ui: &AppWindow, state: &State) {
             .unwrap_or_else(|| "Inicio".to_string())
             .into(),
     );
-    ui.set_rows(ModelRc::new(VecModel::from(
+    let rows: Vec<Row> = if tab.query.trim().is_empty() {
+        let base = tab.path.clone().unwrap_or_default();
         tab.entries
             .iter()
-            .map(|entry| Row {
-                name: entry.name.as_str().into(),
-                meta: if entry.is_dir {
-                    String::new()
-                } else {
-                    format_size(entry.size)
-                }
-                .into(),
-                date: entry.modified_text.as_str().into(),
-                is_dir: entry.is_dir,
-            })
-            .collect::<Vec<_>>(),
-    )));
-    ui.set_item_count(tab.entries.len() as i32);
+            .map(|entry| row_for(entry, &base, None))
+            .collect()
+    } else {
+        tab.search_results
+            .iter()
+            .map(|hit| row_for(&hit.entry, &hit.folder, Some(&hit.folder)))
+            .collect()
+    };
+    ui.set_item_count(rows.len() as i32);
+    ui.set_rows(ModelRc::new(VecModel::from(rows)));
+    ui.set_search_mode(!tab.query.trim().is_empty());
     ui.set_selected_index(-1);
     ui.set_sort_key(tab.sort_key as i32);
     ui.set_sort_dir(if tab.sort_dir == SortDir::Asc { 0 } else { 1 });
+}
+
+fn row_for(entry: &Entry, folder: &Path, show_folder: Option<&Path>) -> Row {
+    let meta = match show_folder {
+        Some(dir) => dir.display().to_string(),
+        None if entry.is_dir => String::new(),
+        None => format_size(entry.size),
+    };
+    Row {
+        name: entry.name.as_str().into(),
+        meta: meta.into(),
+        date: entry.modified_text.as_str().into(),
+        is_dir: entry.is_dir,
+        path: folder.join(&entry.name).display().to_string().into(),
+    }
 }
 
 fn tab_title(path: Option<&Path>) -> String {
