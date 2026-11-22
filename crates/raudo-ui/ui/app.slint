@@ -17,6 +17,13 @@ global Icons {
     out property <image> document: @image-url("../assets/icons/document.svg");
     out property <image> refresh: @image-url("../assets/icons/refresh.svg");
     out property <image> expand: @image-url("../assets/icons/expand.svg");
+    out property <image> plus: @image-url("../assets/icons/plus.svg");
+    out property <image> pencil: @image-url("../assets/icons/pencil.svg");
+    out property <image> copy: @image-url("../assets/icons/copy.svg");
+    out property <image> trash: @image-url("../assets/icons/trash.svg");
+    out property <image> chevron: @image-url("../assets/icons/chevron.svg");
+    out property <image> sort: @image-url("../assets/icons/sort.svg");
+    out property <image> list: @image-url("../assets/icons/list.svg");
 }
 
 component KindIcon inherits Image {
@@ -409,25 +416,69 @@ component DialogButton inherits Rectangle {
     }
 }
 
-component ActionButton inherits Rectangle {
+component BarButton inherits Rectangle {
     in property <string> label;
+    in property <image> icon;
+    in property <bool> show-chevron: false;
+    callback clicked();
+
+    width: root.label == "" ? 32px : (root.show-chevron ? 112px : 96px);
+    height: 30px;
+    border-radius: 6px;
+    background: bar.has-hover ? #2b3038 : transparent;
+
+    HorizontalLayout {
+        padding-left: 8px;
+        padding-right: 8px;
+        spacing: 7px;
+
+        Image {
+            source: root.icon;
+            width: 16px;
+            height: 16px;
+        }
+
+        Text {
+            text: root.label;
+            color: #d3dae2;
+            font-size: 13px;
+            vertical-alignment: center;
+            visible: root.label != "";
+        }
+
+        Image {
+            source: Icons.chevron;
+            width: 12px;
+            height: 12px;
+            visible: root.show-chevron;
+        }
+    }
+
+    bar := TouchArea {
+        clicked => { root.clicked(); }
+    }
+}
+
+component IconAction inherits Rectangle {
+    in property <image> icon;
     in property <bool> enabled: true;
     callback clicked();
 
-    width: 96px;
-    height: 26px;
+    width: 32px;
+    height: 30px;
     border-radius: 6px;
-    background: root.enabled && act.has-hover ? #2f343b : transparent;
+    background: root.enabled && ia.has-hover ? #2b3038 : transparent;
 
-    Text {
-        text: root.label;
-        color: root.enabled ? #cfd8e3 : #5a6068;
-        font-size: 12px;
-        horizontal-alignment: center;
-        vertical-alignment: center;
+    Image {
+        source: root.icon;
+        width: 16px;
+        height: 16px;
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        opacity: root.enabled ? 1 : 0.35;
     }
 
-    act := TouchArea {
+    ia := TouchArea {
         clicked => {
             if (root.enabled) {
                 root.clicked();
@@ -435,6 +486,13 @@ component ActionButton inherits Rectangle {
         }
     }
 }
+
+component BarDivider inherits Rectangle {
+    width: 1px;
+    height: 18px;
+    background: #2f353d;
+}
+
 
 export component AppWindow inherits Window {
     in property <string> current-path;
@@ -691,36 +749,45 @@ export component AppWindow inherits Window {
 
         // ── Action bar ───────────────────────────────────────────
         Rectangle {
-            height: 38px;
+            height: 44px;
             background: rgba(22, 24, 28, 0.62);
 
             HorizontalLayout {
-                padding-left: 12px;
+                padding-left: 8px;
                 padding-right: 12px;
-                spacing: 4px;
+                spacing: 2px;
 
-                ActionButton {
-                    label: "＋ Nuevo";
-                    width: 100px;
+                BarButton {
+                    icon: Icons.home;
+                    label: "Inicio";
+                    clicked => { root.go-home(); }
+                }
+
+                BarDivider {}
+
+                BarButton {
+                    icon: Icons.plus;
+                    label: "Nuevo";
+                    show-chevron: true;
                     clicked => { root.menu-new-folder(); }
                 }
 
-                ActionButton {
-                    label: "Renombrar";
+                BarDivider {}
+
+                IconAction {
+                    icon: Icons.pencil;
                     enabled: root.has-selection;
                     clicked => { root.menu-rename(); }
                 }
 
-                ActionButton {
-                    label: "Copiar ruta";
-                    width: 104px;
+                IconAction {
+                    icon: Icons.copy;
                     enabled: root.has-selection;
                     clicked => { root.menu-copy-path(); }
                 }
 
-                ActionButton {
-                    label: "Eliminar";
-                    width: 86px;
+                IconAction {
+                    icon: Icons.trash;
                     enabled: root.has-selection;
                     clicked => { root.menu-delete(); }
                 }
@@ -730,9 +797,8 @@ export component AppWindow inherits Window {
                     background: transparent;
                 }
 
-                ActionButton {
-                    label: "Refrescar";
-                    width: 86px;
+                IconAction {
+                    icon: Icons.refresh;
                     clicked => { root.refresh(); }
                 }
             }
