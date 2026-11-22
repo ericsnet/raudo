@@ -43,6 +43,20 @@ cargo run --release -p raudo-bench -- list C:\Windows\System32
 
 Cada cifra que aparezca aquí sale del banco de pruebas; no hay estimaciones.
 
+## Rendimiento (medido, Windows 11 26200, Rust 1.98.1)
+
+| Métrica | Files 4.1.1 | Raudo 0.1.0 |
+|---|---|---|
+| Primera ventana | 849 ms | **17 ms** |
+| RAM en reposo | 384 MB | **78,9 MB** |
+| 5.033 entradas (System32) | — | **5,99 ms** |
+| 24.896 entradas (WinSxS) | — | **47,27 ms** |
+| Binario release | — | **10,2 MB** |
+
+Detalle del método y limitaciones: `artifacts/fase-0/INFORME_FASE0.md` (local).
+El backend de render por defecto es el software de Slint; `SLINT_BACKEND=winit-femtovg`
+activa OpenGL.
+
 ## Licencia
 
 GPL-3.0-or-later. Ver [LICENSE](LICENSE).

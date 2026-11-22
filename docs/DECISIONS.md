@@ -44,6 +44,15 @@ tomaron. Se añade una entrada cuando cambia algo estructural.
 - Descartado por ahora: servicio de Windows permanente. Añade instalación y
   superficie de ataque; se estudia si el producto lo necesita.
 
+## Renderer: software por defecto
+
+Medido con el mismo binario: `winit-femtovg` (OpenGL) 205–294 ms hasta la primera
+ventana y 133–202 MB de RAM; `winit-software` 17 ms y 80 MB. Para una UI de texto
+y filas virtualizadas el software renderer es suficiente y la diferencia es
+demasiado grande como para ignorarla. Se fija por defecto en `raudo-app` (solo si
+`SLINT_BACKEND` no está definido). Si la Fase 4 necesita GPU para blur, sombras o
+animaciones, se cambia con mediciones delante.
+
 ## Entorno de compilación
 
 - `CARGO_TARGET_DIR=E:\cargo-target\raudo`. C: tiene poco espacio libre y el
