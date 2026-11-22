@@ -55,6 +55,6 @@ animaciones, se cambia con mediciones delante.
 
 ## Entorno de compilación
 
-- `CARGO_TARGET_DIR=E:\cargo-target\raudo`. C: tiene poco espacio libre y el
-  árbol de artefactos no debe crecer dentro de OneDrive.
-- Artefactos de medición e informes en `artifacts/`, fuera de git.
+- La compilación y sus artefactos viven dentro del propio proyecto, en `target/`
+  (ignorado por git). No se usan rutas de compilación fuera del repositorio.
+- Los informes de medición están versionados en `docs/BENCHMARKS.md`.

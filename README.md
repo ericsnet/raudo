@@ -28,7 +28,6 @@ explorador usable a diario.
 Requiere Windows 10/11, Rust stable y MSVC.
 
 ```powershell
-$env:CARGO_TARGET_DIR = 'E:\cargo-target\raudo'   # opcional, fuera del árbol
 cargo build --release
 cargo run --release -p raudo-app -- C:\Windows
 ```
@@ -57,7 +56,7 @@ Cada cifra que aparezca aquí sale del banco de pruebas; no hay estimaciones.
 tareas, el menú Inicio y el escritorio. Su memoria incluye todo eso y su arranque/listado no se
 puede cronometrar con el mismo método; la fila es contexto, no comparación directa.
 
-Detalle del método y limitaciones: `artifacts/fase-0/INFORME_FASE0.md` (local).
+Detalle del método y limitaciones: [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
 El backend de render por defecto es el software de Slint; `SLINT_BACKEND=winit-femtovg`
 activa OpenGL.
 
