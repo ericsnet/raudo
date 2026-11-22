@@ -300,6 +300,8 @@ component FileRow inherits Rectangle {
     callback rename-requested();
     callback delete-requested();
     callback toggle-hidden-requested();
+    callback pin-requested();
+    callback unpin-requested();
     callback new-folder-requested();
     callback terminal-requested();
     callback properties-requested();
@@ -420,6 +422,9 @@ component FileRow inherits Rectangle {
                 MenuRow { text: "Eliminar"; clicked => { ctx.close(); root.delete-requested(); } }
                 MenuRow { text: "Ocultar o mostrar elemento"; clicked => { ctx.close(); root.toggle-hidden-requested(); } }
                 MenuRule {}
+                MenuRow { text: "Anclar al menú lateral"; clicked => { ctx.close(); root.pin-requested(); } }
+                MenuRow { text: "Quitar del menú lateral"; clicked => { ctx.close(); root.unpin-requested(); } }
+                MenuRule {}
                 MenuRow { text: "Nueva carpeta"; clicked => { ctx.close(); root.new-folder-requested(); } }
                 MenuRow { text: "Abrir en terminal"; clicked => { ctx.close(); root.terminal-requested(); } }
                 MenuRow { text: "Propiedades"; clicked => { ctx.close(); root.properties-requested(); } }
@@ -520,10 +525,16 @@ component BarButton inherits Rectangle {
         padding-right: 8px;
         spacing: 7px;
 
-        Image {
-            source: root.icon;
+        Rectangle {
             width: 16px;
-            height: 16px;
+            background: transparent;
+
+            Image {
+                source: root.icon;
+                width: 16px;
+                height: 16px;
+                y: (parent.height - self.height) / 2;
+            }
         }
 
         Text {
@@ -534,11 +545,17 @@ component BarButton inherits Rectangle {
             visible: root.label != "";
         }
 
-        Image {
-            source: Icons.chevron;
+        Rectangle {
             width: 12px;
-            height: 12px;
+            background: transparent;
             visible: root.show-chevron;
+
+            Image {
+                source: Icons.chevron;
+                width: 12px;
+                height: 12px;
+                y: (parent.height - self.height) / 2;
+            }
         }
     }
 
@@ -604,6 +621,8 @@ export component AppWindow inherits Window {
     in property <bool> show-hidden;
     in-out property <string> rename-text;
     in-out property <string> search-text;
+    in-out property <bool> address-edit: false;
+    in-out property <string> address-text;
 
     callback select-tab(int);
     callback close-tab(int);
@@ -622,6 +641,9 @@ export component AppWindow inherits Window {
     callback toggle-hidden();
     callback toggle-row-hidden();
     callback search-changed(string);
+    callback address-submitted(string);
+    callback pin-current();
+    callback unpin-current();
     callback menu-open();
     callback menu-open-with();
     callback menu-copy-path();
@@ -743,6 +765,12 @@ export component AppWindow inherits Window {
                     background: #23272d;
                     clip: true;
 
+                    TouchArea {
+                        clicked => {
+                            root.address-text = root.current-path;
+                            root.address-edit = true;
+                        }
+                    }
                     Rectangle {
                         width: 100%;
                         height: 100%;
@@ -802,6 +830,24 @@ export component AppWindow inherits Window {
                             }
                         }
                     }
+                    if root.address-edit : Rectangle {
+                        width: 100%;
+                        height: 100%;
+                        background: #23272d;
+                        border-radius: 8px;
+
+                        TextInput {
+                            x: 10px;
+                            width: parent.width - 20px;
+                            height: parent.height;
+                            text <=> root.address-text;
+                            color: #e9edf2;
+                            font-size: 13px;
+                            vertical-alignment: center;
+                            accepted => { root.address-submitted(self.text); }
+                            init => { self.focus(); }
+                        }
+                    }
                 }
 
                 Rectangle {
@@ -830,11 +876,6 @@ export component AppWindow inherits Window {
                     }
                 }
 
-                ToolButton {
-                    icon: Icons.refresh;
-                    has-icon: true;
-                    clicked => { root.refresh(); }
-                }
             }
         }
 
@@ -897,10 +938,6 @@ export component AppWindow inherits Window {
                     background: transparent;
                 }
 
-                IconAction {
-                    icon: Icons.refresh;
-                    clicked => { root.refresh(); }
-                }
             }
         }
 
@@ -1157,6 +1194,8 @@ export component AppWindow inherits Window {
                             rename-requested => { root.menu-rename(); }
                             delete-requested => { root.menu-delete(); }
                             toggle-hidden-requested => { root.toggle-row-hidden(); }
+                            pin-requested => { root.pin-current(); }
+                            unpin-requested => { root.unpin-current(); }
                             new-folder-requested => { root.menu-new-folder(); }
                             terminal-requested => { root.menu-terminal(); }
                             properties-requested => { root.menu-properties(); }

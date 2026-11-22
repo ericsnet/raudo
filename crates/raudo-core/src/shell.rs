@@ -89,3 +89,22 @@ pub fn open_terminal(dir: &Path) {
             .spawn();
     }
 }
+
+/// Opens `cmd.exe` in `dir`.
+pub fn open_cmd(dir: &Path) {
+    let _ = std::process::Command::new("cmd.exe")
+        .arg("/K")
+        .arg("cd")
+        .arg("/d")
+        .arg(dir)
+        .spawn();
+}
+
+/// Opens PowerShell in `dir`.
+pub fn open_powershell(dir: &Path) {
+    let _ = std::process::Command::new("powershell.exe")
+        .arg("-NoExit")
+        .arg("-Command")
+        .arg(format!("Set-Location -LiteralPath '{}'", dir.display()))
+        .spawn();
+}

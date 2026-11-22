@@ -55,6 +55,7 @@ struct State {
     renaming: Option<PathBuf>,
     /// Hidden and system entries are filtered out of the list unless this is on.
     show_hidden: bool,
+    pinned: Vec<PathBuf>,
 }
 
 impl State {
@@ -87,12 +88,13 @@ pub fn run(
         renaming: None,
         // `RAUDO_SHOW_HIDDEN=1` arranca con los ocultos a la vista.
         show_hidden: std::env::var_os("RAUDO_SHOW_HIDDEN").is_some_and(|v| !v.is_empty()),
+        pinned: load_pinned(),
     }));
 
     ui.set_drives(ModelRc::new(VecModel::from(
         drives().iter().map(Drive::from_info).collect::<Vec<_>>(),
     )));
-    ui.set_pinned(ModelRc::new(VecModel::from(pinned_items())));
+    ui.set_pinned(ModelRc::new(VecModel::from(pinned_items(&load_pinned()))));
     if let Some(image) = background_image() {
         ui.set_background_image(image);
     }
@@ -547,6 +549,93 @@ fn wire_callbacks(ui: &AppWindow, state: &Shared) {
         }
     });
 
+    ui.on_address_submitted({
+        let ui_weak = ui.as_weak();
+        let state = Arc::clone(state);
+        move |text| {
+            let Some(ui) = ui_weak.upgrade() else {
+                return;
+            };
+            let raw = text.trim().trim_matches('"').to_string();
+            let index = state.lock().unwrap().active;
+            let current = current_dir(&state);
+            ui.set_address_edit(false);
+
+            if raw.is_empty() {
+                navigate(&ui, &state, index, None, NavMode::Push);
+                return;
+            }
+
+            match raw.to_lowercase().as_str() {
+                "cmd" | "cmd.exe" => {
+                    if let Some(dir) = current.as_deref() {
+                        raudo_core::shell::open_cmd(dir);
+                    }
+                    return;
+                }
+                "powershell" | "pwsh" | "powershell.exe" => {
+                    if let Some(dir) = current.as_deref() {
+                        raudo_core::shell::open_powershell(dir);
+                    }
+                    return;
+                }
+                "explorer" | "explorer.exe" => {
+                    if let Some(dir) = current.as_deref() {
+                        raudo_core::shell::open(dir);
+                    }
+                    return;
+                }
+                _ => {}
+            }
+
+            let path = PathBuf::from(&raw);
+            if path.is_dir() {
+                navigate(&ui, &state, index, Some(path), NavMode::Push);
+            } else if path.is_file() {
+                raudo_core::shell::open(&path);
+            }
+        }
+    });
+
+    ui.on_pin_current({
+        let ui_weak = ui.as_weak();
+        let state = Arc::clone(state);
+        move || {
+            let Some(ui) = ui_weak.upgrade() else {
+                return;
+            };
+            let target = selected_row(&ui)
+                .map(|row| PathBuf::from(row.path.as_str()))
+                .filter(|path| path.is_dir())
+                .or_else(|| current_dir(&state));
+            if let Some(path) = target {
+                let mut s = state.lock().unwrap();
+                if !s.pinned.iter().any(|pinned| pinned == &path) {
+                    s.pinned.push(path);
+                }
+                save_pinned(&s.pinned);
+            }
+            render(&ui, &state.lock().unwrap());
+        }
+    });
+
+    ui.on_unpin_current({
+        let ui_weak = ui.as_weak();
+        let state = Arc::clone(state);
+        move || {
+            let Some(ui) = ui_weak.upgrade() else {
+                return;
+            };
+            let target = selected_row(&ui).map(|row| PathBuf::from(row.path.as_str()));
+            if let Some(path) = target {
+                let mut s = state.lock().unwrap();
+                s.pinned.retain(|pinned| pinned != &path);
+                save_pinned(&s.pinned);
+            }
+            render(&ui, &state.lock().unwrap());
+        }
+    });
+
     ui.on_search_changed({
         let ui_weak = ui.as_weak();
         let state = Arc::clone(state);
@@ -755,6 +844,7 @@ fn render(ui: &AppWindow, state: &State) {
     ui.set_item_count(rows.len() as i32);
     ui.set_show_hidden(state.show_hidden);
     ui.set_rows(ModelRc::new(VecModel::from(rows)));
+    ui.set_pinned(ModelRc::new(VecModel::from(pinned_items(&state.pinned))));
     ui.set_search_mode(!tab.query.trim().is_empty());
     ui.set_selected_index(-1);
     ui.set_has_selection(false);
@@ -905,7 +995,7 @@ fn crumbs(path: &Path) -> Vec<Crumb> {
     result
 }
 
-fn pinned_items() -> Vec<NavItem> {
+fn pinned_items(extra: &[PathBuf]) -> Vec<NavItem> {
     let mut items: Vec<NavItem> = raudo_core::known_folders()
         .into_iter()
         .map(|folder| {
@@ -925,20 +1015,15 @@ fn pinned_items() -> Vec<NavItem> {
         })
         .collect();
 
-    if let Some(home) = std::env::var_os("USERPROFILE").map(PathBuf::from) {
-        let projects = home.join("OneDrive").join("Escritorio").join("Proyectos");
-        if projects.is_dir() {
+    for path in extra {
+        if path.is_dir() {
             items.push(NavItem {
-                label: "Proyectos".into(),
-                path: path_text(&projects).into(),
-                kind: "folder".into(),
-            });
-        }
-        let icons = home.join("Iconos");
-        if icons.is_dir() {
-            items.push(NavItem {
-                label: "Iconos".into(),
-                path: path_text(&icons).into(),
+                label: path
+                    .file_name()
+                    .map(|name| name.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| path_text(path))
+                    .into(),
+                path: path_text(path).into(),
                 kind: "folder".into(),
             });
         }
@@ -951,6 +1036,39 @@ fn pinned_items() -> Vec<NavItem> {
     });
 
     items
+}
+
+fn pinned_file() -> Option<PathBuf> {
+    std::env::var_os("APPDATA").map(|dir| PathBuf::from(dir).join("Raudo").join("pinned.txt"))
+}
+
+fn load_pinned() -> Vec<PathBuf> {
+    let Some(file) = pinned_file() else {
+        return Vec::new();
+    };
+    let Ok(text) = std::fs::read_to_string(file) else {
+        return Vec::new();
+    };
+    text.lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(PathBuf::from)
+        .collect()
+}
+
+fn save_pinned(paths: &[PathBuf]) {
+    let Some(file) = pinned_file() else {
+        return;
+    };
+    if let Some(parent) = file.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let body = paths
+        .iter()
+        .map(|path| path_text(path))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let _ = std::fs::write(file, body);
 }
 
 fn background_image() -> Option<slint::Image> {
