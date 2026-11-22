@@ -100,6 +100,34 @@ pub fn run(
 
     ui.show()?;
 
+    // The window is resizable and keeps the OS frame. The preferred size is
+    // requested once; afterwards the user's size and maximize state win.
+    let weak = ui.as_weak();
+    slint::Timer::single_shot(std::time::Duration::from_millis(400), move || {
+        if let Some(ui) = weak.upgrade() {
+            ui.window()
+                .set_size(slint::WindowSize::Logical(slint::LogicalSize::new(
+                    1280.0, 800.0,
+                )));
+        }
+    });
+
+    if std::env::var_os("RAUDO_TEST_REFRESH").is_some() {
+        let weak = ui.as_weak();
+        let state = Arc::clone(&state);
+        let timer = slint::Timer::default();
+        timer.start(
+            slint::TimerMode::Repeated,
+            std::time::Duration::from_secs(2),
+            move || {
+                if let Some(ui) = weak.upgrade() {
+                    render(&ui, &state.lock().unwrap());
+                }
+            },
+        );
+        std::mem::forget(timer);
+    }
+
     if let Some(path) = trace {
         let _ = std::fs::write(
             path,

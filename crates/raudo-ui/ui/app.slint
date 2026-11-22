@@ -134,11 +134,16 @@ component NavEntry inherits Rectangle {
             background: root.active ? #5b9dff : transparent;
         }
 
-        Image {
-            source: root.icon;
+        Rectangle {
             width: 16px;
-            height: 16px;
-            image-fit: contain;
+            background: transparent;
+
+            Image {
+                source: root.icon;
+                width: 16px;
+                height: 16px;
+                y: (parent.height - self.height) / 2;
+            }
         }
 
         Text {
@@ -178,11 +183,16 @@ component DriveCard inherits Rectangle {
         HorizontalLayout {
             spacing: 8px;
 
-            Image {
-                source: root.drive.icon;
+            Rectangle {
                 width: 20px;
-                height: 20px;
-                image-fit: contain;
+                background: transparent;
+
+                Image {
+                    source: root.drive.icon;
+                    width: 20px;
+                    height: 20px;
+                    y: (parent.height - self.height) / 2;
+                }
             }
 
             Text {
@@ -240,11 +250,16 @@ component FileRow inherits Rectangle {
         padding-right: 16px;
         spacing: 10px;
 
-        Image {
-            source: root.icon;
+        Rectangle {
             width: 18px;
-            height: 18px;
-            image-fit: contain;
+            background: transparent;
+
+            Image {
+                source: root.icon;
+                width: 18px;
+                height: 18px;
+                y: (parent.height - self.height) / 2;
+            }
         }
 
         Text {
