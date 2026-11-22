@@ -9,6 +9,7 @@ repository.workspace = true
 authors.workspace = true
 
 [dependencies]
+arboard = "3"
 raudo-core = { workspace = true }
 slint = { workspace = true }
 

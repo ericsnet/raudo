@@ -7,6 +7,8 @@ slint::include_modules!();
 
 pub use slint::PlatformError;
 
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -52,6 +54,7 @@ impl TabState {
 struct State {
     tabs: Vec<TabState>,
     active: usize,
+    renaming: Option<PathBuf>,
 }
 
 impl State {
@@ -81,6 +84,7 @@ pub fn run(
     let state: Shared = Arc::new(Mutex::new(State {
         tabs: vec![TabState::new(start.clone())],
         active: 0,
+        renaming: None,
     }));
 
     ui.set_drives(ModelRc::new(VecModel::from(
@@ -95,19 +99,6 @@ pub fn run(
     navigate(&ui, &state, 0, start, NavMode::Keep);
 
     ui.show()?;
-
-    // Slint marks the window as fixed-size when width/height are bound in the
-    // .slint, which removes the OS maximize button. With no bindings the window
-    // is resizable; the preferred size is requested once the layout has settled.
-    let weak = ui.as_weak();
-    slint::Timer::single_shot(std::time::Duration::from_millis(300), move || {
-        if let Some(ui) = weak.upgrade() {
-            ui.window()
-                .set_size(slint::WindowSize::Logical(slint::LogicalSize::new(
-                    1280.0, 800.0,
-                )));
-        }
-    });
 
     if let Some(path) = trace {
         let _ = std::fs::write(
@@ -138,8 +129,34 @@ impl Drive {
             .into(),
             usage,
             root: info.root.as_str().into(),
+            icon: icon_image("drive"),
         }
     }
+}
+
+thread_local! {
+    static ICON_CACHE: RefCell<HashMap<String, slint::Image>> = RefCell::new(HashMap::new());
+}
+
+/// Converts a shell icon into a Slint image, cached per extension/type.
+fn icon_image(key: &str) -> slint::Image {
+    ICON_CACHE.with(|cache| {
+        if let Some(image) = cache.borrow().get(key) {
+            return image.clone();
+        }
+        let image = raudo_core::icons::icon(key)
+            .map(|shell| {
+                let buffer = slint::SharedPixelBuffer::<slint::Rgba8Pixel>::clone_from_slice(
+                    &shell.pixels,
+                    shell.width,
+                    shell.height,
+                );
+                slint::Image::from_rgba8_premultiplied(buffer)
+            })
+            .unwrap_or_default();
+        cache.borrow_mut().insert(key.to_string(), image.clone());
+        image
+    })
 }
 
 fn active_index(state: &Shared) -> usize {
@@ -337,6 +354,166 @@ fn wire_callbacks(ui: &AppWindow, state: &Shared) {
         move |index| {
             if let Some(ui) = ui_weak.upgrade() {
                 ui.set_selected_index(index);
+                ui.set_has_selection(index >= 0);
+            }
+        }
+    });
+
+    ui.on_menu_open({
+        let ui_weak = ui.as_weak();
+        let state = Arc::clone(state);
+        move || {
+            let Some(ui) = ui_weak.upgrade() else {
+                return;
+            };
+            let Some(row) = selected_row(&ui) else {
+                return;
+            };
+            if row.is_dir {
+                let index = state.lock().unwrap().active;
+                navigate(
+                    &ui,
+                    &state,
+                    index,
+                    Some(PathBuf::from(row.path.as_str())),
+                    NavMode::Push,
+                );
+            } else {
+                raudo_core::shell::open(Path::new(row.path.as_str()));
+            }
+        }
+    });
+
+    ui.on_menu_open_with({
+        let ui_weak = ui.as_weak();
+        move || {
+            if let Some(ui) = ui_weak.upgrade()
+                && let Some(row) = selected_row(&ui)
+            {
+                raudo_core::shell::open_with(Path::new(row.path.as_str()));
+            }
+        }
+    });
+
+    ui.on_menu_copy_path({
+        let ui_weak = ui.as_weak();
+        move || {
+            if let Some(ui) = ui_weak.upgrade()
+                && let Some(row) = selected_row(&ui)
+                && let Ok(mut clipboard) = arboard::Clipboard::new()
+            {
+                let _ = clipboard.set_text(row.path.to_string());
+            }
+        }
+    });
+
+    ui.on_menu_rename({
+        let ui_weak = ui.as_weak();
+        let state = Arc::clone(state);
+        move || {
+            let Some(ui) = ui_weak.upgrade() else {
+                return;
+            };
+            let Some(row) = selected_row(&ui) else {
+                return;
+            };
+            state.lock().unwrap().renaming = Some(PathBuf::from(row.path.as_str()));
+            ui.set_rename_text(row.name.clone());
+            ui.set_renaming(true);
+        }
+    });
+
+    ui.on_cancel_rename({
+        let ui_weak = ui.as_weak();
+        let state = Arc::clone(state);
+        move || {
+            let Some(ui) = ui_weak.upgrade() else {
+                return;
+            };
+            state.lock().unwrap().renaming = None;
+            ui.set_renaming(false);
+        }
+    });
+
+    ui.on_confirm_rename({
+        let ui_weak = ui.as_weak();
+        let state = Arc::clone(state);
+        move || {
+            let Some(ui) = ui_weak.upgrade() else {
+                return;
+            };
+            let name = ui.get_rename_text().trim().to_string();
+            let source = state.lock().unwrap().renaming.take();
+            if let Some(source) = source
+                && !name.is_empty()
+                && !name.contains(['\\', '/'])
+                && let Some(parent) = source.parent()
+            {
+                let target = parent.join(&name);
+                if target != source {
+                    let _ = std::fs::rename(&source, &target);
+                }
+            }
+            ui.set_renaming(false);
+            refresh_current(&ui, &state);
+        }
+    });
+
+    ui.on_menu_delete({
+        let ui_weak = ui.as_weak();
+        let state = Arc::clone(state);
+        move || {
+            let Some(ui) = ui_weak.upgrade() else {
+                return;
+            };
+            let Some(row) = selected_row(&ui) else {
+                return;
+            };
+            if raudo_core::shell::delete_to_recycle_bin(Path::new(row.path.as_str())).is_ok() {
+                refresh_current(&ui, &state);
+            }
+        }
+    });
+
+    ui.on_menu_new_folder({
+        let ui_weak = ui.as_weak();
+        let state = Arc::clone(state);
+        move || {
+            let Some(ui) = ui_weak.upgrade() else {
+                return;
+            };
+            if let Some(dir) = current_dir(&state)
+                && create_folder(&dir).is_some()
+            {
+                refresh_current(&ui, &state);
+            }
+        }
+    });
+
+    ui.on_menu_properties({
+        let ui_weak = ui.as_weak();
+        let state = Arc::clone(state);
+        move || {
+            let Some(ui) = ui_weak.upgrade() else {
+                return;
+            };
+            let target = selected_row(&ui)
+                .map(|row| PathBuf::from(row.path.as_str()))
+                .or_else(|| current_dir(&state));
+            if let Some(target) = target {
+                raudo_core::shell::show_properties(&target);
+            }
+        }
+    });
+
+    ui.on_menu_terminal({
+        let ui_weak = ui.as_weak();
+        let state = Arc::clone(state);
+        move || {
+            if ui_weak.upgrade().is_some()
+                && let Some(dir) = current_dir(&state)
+            {
+                raudo_core::shell::open_terminal(&dir);
             }
         }
     });
@@ -564,8 +741,44 @@ fn render(ui: &AppWindow, state: &State) {
     ui.set_rows(ModelRc::new(VecModel::from(rows)));
     ui.set_search_mode(!tab.query.trim().is_empty());
     ui.set_selected_index(-1);
+    ui.set_has_selection(false);
     ui.set_sort_key(tab.sort_key as i32);
     ui.set_sort_dir(if tab.sort_dir == SortDir::Asc { 0 } else { 1 });
+}
+
+fn selected_row(ui: &AppWindow) -> Option<Row> {
+    let index = ui.get_selected_index();
+    if index < 0 {
+        return None;
+    }
+    ui.get_rows().row_data(index as usize)
+}
+
+fn current_dir(state: &Shared) -> Option<PathBuf> {
+    state.lock().unwrap().active_tab().path.clone()
+}
+
+fn refresh_current(ui: &AppWindow, state: &Shared) {
+    let (index, target) = {
+        let s = state.lock().unwrap();
+        (s.active, s.active_tab().path.clone())
+    };
+    navigate(ui, state, index, target, NavMode::Keep);
+}
+
+fn create_folder(dir: &Path) -> Option<PathBuf> {
+    for attempt in 0..100 {
+        let name = if attempt == 0 {
+            "Nueva carpeta".to_string()
+        } else {
+            format!("Nueva carpeta ({attempt})")
+        };
+        let candidate = dir.join(name);
+        if std::fs::create_dir(&candidate).is_ok() {
+            return Some(candidate);
+        }
+    }
+    None
 }
 
 fn row_for(entry: &Entry, folder: &Path, show_folder: Option<&Path>) -> Row {
@@ -580,29 +793,18 @@ fn row_for(entry: &Entry, folder: &Path, show_folder: Option<&Path>) -> Row {
         date: entry.modified_text.as_str().into(),
         is_dir: entry.is_dir,
         path: folder.join(&entry.name).display().to_string().into(),
-        kind: kind_for(&entry.name, entry.is_dir).into(),
+        icon: icon_image(icon_key(&entry.name, entry.is_dir)),
     }
 }
 
-fn kind_for(name: &str, is_dir: bool) -> &'static str {
+fn icon_key(name: &str, is_dir: bool) -> &str {
     if is_dir {
-        return "folder";
+        return "dir";
     }
-    let extension = name
-        .rsplit_once('.')
-        .map(|(_, ext)| ext.to_ascii_lowercase())
-        .unwrap_or_default();
-    match extension.as_str() {
-        "exe" | "msi" | "bat" | "cmd" | "com" | "ps1" => "exe",
-        "png" | "jpg" | "jpeg" | "gif" | "bmp" | "webp" | "svg" | "ico" | "tif" | "tiff" => "image",
-        "mp3" | "wav" | "flac" | "ogg" | "m4a" | "aac" | "wma" => "audio",
-        "mp4" | "mkv" | "avi" | "mov" | "wmv" | "webm" | "m4v" => "video",
-        "zip" | "rar" | "7z" | "tar" | "gz" | "bz2" | "xz" | "iso" => "archive",
-        "rs" | "js" | "ts" | "tsx" | "jsx" | "py" | "c" | "h" | "cpp" | "hpp" | "cs" | "java"
-        | "go" | "rb" | "php" | "html" | "css" | "scss" | "json" | "toml" | "yaml" | "yml"
-        | "xml" | "sh" | "md" => "code",
-        _ => "file",
-    }
+    name.rsplit_once('.')
+        .map(|(_, ext)| ext)
+        .filter(|ext| !ext.is_empty())
+        .unwrap_or("file")
 }
 
 fn tab_title(path: Option<&Path>) -> String {
@@ -647,20 +849,10 @@ fn crumbs(path: &Path) -> Vec<Crumb> {
 fn pinned_items() -> Vec<NavItem> {
     raudo_core::known_folders()
         .into_iter()
-        .map(|folder| {
-            let kind = match folder.label.as_str() {
-                "Descargas" => "download",
-                "Documentos" => "document",
-                "Imágenes" => "image",
-                "Música" => "audio",
-                "Vídeos" => "video",
-                _ => "folder",
-            };
-            NavItem {
-                label: folder.label.into(),
-                path: path_text(&folder.path).into(),
-                kind: kind.into(),
-            }
+        .map(|folder| NavItem {
+            label: folder.label.into(),
+            path: path_text(&folder.path).into(),
+            icon: icon_image("dir"),
         })
         .collect()
 }

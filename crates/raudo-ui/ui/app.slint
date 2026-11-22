@@ -44,7 +44,7 @@ export struct Row {
     date: string,
     is-dir: bool,
     path: string,
-    kind: string,
+    icon: image,
 }
 
 export struct Crumb {
@@ -62,12 +62,13 @@ export struct Drive {
     detail: string,
     usage: float,
     root: string,
+    icon: image,
 }
 
 export struct NavItem {
     label: string,
     path: string,
-    kind: string,
+    icon: image,
 }
 
 component ToolButton inherits Rectangle {
@@ -113,7 +114,7 @@ component ToolButton inherits Rectangle {
 
 component NavEntry inherits Rectangle {
     in property <string> label;
-    in property <string> kind;
+    in property <image> icon;
     in property <bool> active;
     callback clicked();
 
@@ -133,15 +134,15 @@ component NavEntry inherits Rectangle {
             background: root.active ? #5b9dff : transparent;
         }
 
-        KindIcon {
-            kind: root.kind;
+        Image {
+            source: root.icon;
             width: 16px;
             height: 16px;
+            image-fit: contain;
         }
 
         Text {
-            text: root.label;
-            color: root.active ? #eef1f5 : #c2c8cf;
+            text: root.label;            color: root.active ? #eef1f5 : #c2c8cf;
             font-size: 13px;
             vertical-alignment: center;
             horizontal-stretch: 1;
@@ -177,10 +178,11 @@ component DriveCard inherits Rectangle {
         HorizontalLayout {
             spacing: 8px;
 
-            KindIcon {
-                kind: "drive";
+            Image {
+                source: root.drive.icon;
                 width: 20px;
                 height: 20px;
+                image-fit: contain;
             }
 
             Text {
@@ -226,7 +228,7 @@ component FileRow inherits Rectangle {
     in property <bool> is-dir;
     in property <bool> selected;
     in property <bool> search-mode;
-    in property <string> kind;
+    in property <image> icon;
     callback select();
     callback activate();
 
@@ -238,10 +240,11 @@ component FileRow inherits Rectangle {
         padding-right: 16px;
         spacing: 10px;
 
-        KindIcon {
-            kind: root.kind;
+        Image {
+            source: root.icon;
             width: 18px;
             height: 18px;
+            image-fit: contain;
         }
 
         Text {
@@ -275,6 +278,11 @@ component FileRow inherits Rectangle {
     row-touch := TouchArea {
         clicked => { root.select(); }
         double-clicked => { root.activate(); }
+        pointer-event(event) => {
+            if (event.button == PointerEventButton.right && event.kind == PointerEventKind.down) {
+                root.select();
+            }
+        }
     }
 }
 
@@ -328,6 +336,30 @@ component TabView inherits Rectangle {
     }
 }
 
+component DialogButton inherits Rectangle {
+    in property <string> label;
+    in property <bool> accent: false;
+    callback clicked();
+
+    width: 92px;
+    height: 30px;
+    border-radius: 6px;
+    background: root.accent ? (btn.has-hover ? #6cabff : #5b9dff) : (btn.has-hover ? #343b45 : #2a3038);
+
+    Text {
+        text: root.label;
+        color: root.accent ? #0d1219 : #d7dee6;
+        font-size: 12px;
+        font-weight: root.accent ? 600 : 400;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+
+    btn := TouchArea {
+        clicked => { root.clicked(); }
+    }
+}
+
 export component AppWindow inherits Window {
     in property <string> current-path;
     in property <[Row]> rows;
@@ -345,6 +377,9 @@ export component AppWindow inherits Window {
     in property <int> item-count;
     in property <image> background-image;
     in property <bool> search-mode;
+    in property <bool> has-selection;
+    in property <bool> renaming;
+    in-out property <string> rename-text;
     in-out property <string> search-text;
 
     callback select-tab(int);
@@ -362,6 +397,16 @@ export component AppWindow inherits Window {
     callback open-drive(string);
     callback toggle-fullscreen();
     callback search-changed(string);
+    callback menu-open();
+    callback menu-open-with();
+    callback menu-copy-path();
+    callback menu-rename();
+    callback menu-delete();
+    callback menu-new-folder();
+    callback menu-properties();
+    callback menu-terminal();
+    callback confirm-rename();
+    callback cancel-rename();
 
     title: "Raudo";
     icon: @image-url("../assets/icons/app.svg");
@@ -587,7 +632,7 @@ export component AppWindow inherits Window {
 
                         NavEntry {
                             label: "Inicio";
-                            kind: "home";
+                            icon: Icons.home;
                             active: root.is-home;
                             clicked => { root.go-home(); }
                         }
@@ -598,7 +643,7 @@ export component AppWindow inherits Window {
 
                         for item in root.pinned : NavEntry {
                             label: item.label;
-                            kind: item.kind;
+                            icon: item.icon;
                             active: root.current-path == item.path;
                             clicked => { root.open-drive(item.path); }
                         }
@@ -609,7 +654,7 @@ export component AppWindow inherits Window {
 
                         for drive in root.drives : NavEntry {
                             label: drive.letter + "  " + drive.label;
-                            kind: "drive";
+                            icon: drive.icon;
                             active: root.current-path == drive.root;
                             clicked => { root.open-drive(drive.root); }
                         }
@@ -621,7 +666,55 @@ export component AppWindow inherits Window {
             Rectangle {
                 background: transparent;
 
-                if root.is-home : VerticalLayout {
+                ContextMenuArea {
+                    Menu {
+                        MenuItem {
+                            title: "Abrir";
+                            enabled: root.has-selection;
+                            activated => { root.menu-open(); }
+                        }
+                        MenuItem {
+                            title: "Abrir con...";
+                            enabled: root.has-selection;
+                            activated => { root.menu-open-with(); }
+                        }
+                        MenuSeparator {}
+                        MenuItem {
+                            title: "Copiar ruta";
+                            enabled: root.has-selection;
+                            activated => { root.menu-copy-path(); }
+                        }
+                        MenuItem {
+                            title: "Renombrar";
+                            enabled: root.has-selection;
+                            activated => { root.menu-rename(); }
+                        }
+                        MenuItem {
+                            title: "Eliminar";
+                            enabled: root.has-selection;
+                            activated => { root.menu-delete(); }
+                        }
+                        MenuSeparator {}
+                        MenuItem {
+                            title: "Nueva carpeta";
+                            activated => { root.menu-new-folder(); }
+                        }
+                        MenuItem {
+                            title: "Abrir en terminal";
+                            activated => { root.menu-terminal(); }
+                        }
+                        MenuItem {
+                            title: "Propiedades";
+                            activated => { root.menu-properties(); }
+                        }
+                        MenuItem {
+                            title: "Refrescar";
+                            activated => { root.refresh(); }
+                        }
+                    }
+
+                    VerticalLayout {
+                        if root.is-home : VerticalLayout {
                     padding: 24px;
                     spacing: 12px;
 
@@ -768,7 +861,7 @@ export component AppWindow inherits Window {
                             meta: row.meta;
                             date: row.date;
                             is-dir: row.is-dir;
-                            kind: row.kind;
+                            icon: row.icon;
                             selected: i == root.selected-index;
                             search-mode: root.search-mode;
                             select => { root.select-row(i); }
@@ -792,6 +885,72 @@ export component AppWindow inherits Window {
                             }
                         }
                     }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if root.renaming : Rectangle {
+        background: #06080b;
+        opacity: 0.55;
+    }
+
+    if root.renaming : Rectangle {
+        width: 380px;
+        height: 136px;
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        border-radius: 10px;
+        background: #23272d;
+        border-width: 1px;
+        border-color: #303843;
+
+        VerticalLayout {
+            padding: 16px;
+            spacing: 10px;
+
+            Text {
+                text: "Renombrar";
+                color: #eef1f5;
+                font-size: 14px;
+                height: 20px;
+                vertical-stretch: 0;
+                vertical-alignment: center;
+            }
+
+            Rectangle {
+                height: 32px;
+                vertical-stretch: 0;
+                border-radius: 6px;
+                background: #1a1e24;
+
+                TextInput {
+                    x: 10px;
+                    width: parent.width - 20px;
+                    height: parent.height;
+                    text <=> root.rename-text;
+                    color: #e9edf2;
+                    vertical-alignment: center;
+                }
+            }
+
+            HorizontalLayout {
+                height: 30px;
+                vertical-stretch: 0;
+                alignment: end;
+                spacing: 8px;
+
+                DialogButton {
+                    label: "Cancelar";
+                    clicked => { root.cancel-rename(); }
+                }
+
+                DialogButton {
+                    label: "Aceptar";
+                    accent: true;
+                    clicked => { root.confirm-rename(); }
                 }
             }
         }
