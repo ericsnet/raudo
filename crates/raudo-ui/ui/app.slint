@@ -15,6 +15,8 @@ global Icons {
     out property <image> home: @image-url("../assets/icons/home.svg");
     out property <image> download: @image-url("../assets/icons/download.svg");
     out property <image> document: @image-url("../assets/icons/document.svg");
+    out property <image> refresh: @image-url("../assets/icons/refresh.svg");
+    out property <image> expand: @image-url("../assets/icons/expand.svg");
 }
 
 component KindIcon inherits Image {
@@ -70,6 +72,8 @@ export struct NavItem {
 
 component ToolButton inherits Rectangle {
     in property <string> label;
+    in property <image> icon;
+    in property <bool> has-icon: false;
     in property <bool> enabled: true;
     callback clicked();
 
@@ -78,12 +82,24 @@ component ToolButton inherits Rectangle {
     border-radius: 6px;
     background: enabled && touch.has-hover ? #2f343b : transparent;
 
+    KindIcon {
+        kind: "";
+        source: root.icon;
+        width: 16px;
+        height: 16px;
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        opacity: root.enabled ? 1 : 0.4;
+        visible: root.has-icon;
+    }
+
     Text {
         text: root.label;
         color: root.enabled ? #d6dbe1 : #5a6068;
         font-size: 15px;
         horizontal-alignment: center;
         vertical-alignment: center;
+        visible: !root.has-icon;
     }
 
     touch := TouchArea {
@@ -447,62 +463,73 @@ export component AppWindow inherits Window {
                 }
 
                 ToolButton {
-                    label: "⌂";
+                    icon: Icons.home;
+                    has-icon: true;
                     clicked => { root.go-home(); }
                 }
 
                 Rectangle {
                     height: 30px;
+                    horizontal-stretch: 1;
+                    min-width: 90px;
                     border-radius: 8px;
                     background: #23272d;
+                    clip: true;
 
-                    HorizontalLayout {
-                        padding-left: 10px;
-                        padding-right: 10px;
-                        spacing: 2px;
-                        alignment: start;
+                    Rectangle {
+                        width: 100%;
+                        height: 100%;
+                        background: transparent;
+                        clip: true;
 
-                        Text {
-                            text: root.is-home ? "Inicio" : "";
-                            color: #d8dde3;
-                            font-size: 13px;
-                            vertical-alignment: center;
-                        }
+                        HorizontalLayout {
+                            padding-left: 10px;
+                            padding-right: 10px;
+                            spacing: 2px;
+                            alignment: start;
 
-                        if !root.is-home : HorizontalLayout {
-                            horizontal-stretch: 0;
+                            Text {
+                                text: root.is-home ? "Inicio" : "";
+                                color: #d8dde3;
+                                font-size: 13px;
+                                vertical-alignment: center;
+                            }
 
-                            for crumb in root.crumbs : HorizontalLayout {
+                            if !root.is-home : HorizontalLayout {
                                 horizontal-stretch: 0;
 
-                                Text {
-                                    text: "›";
-                                    color: #6d747c;
-                                    font-size: 13px;
-                                    vertical-alignment: center;
+                                for crumb in root.crumbs : HorizontalLayout {
                                     horizontal-stretch: 0;
-                                }
 
-                                Rectangle {
-                                    height: 24px;
-                                    horizontal-stretch: 0;
-                                    border-radius: 5px;
-                                    background: crumb-touch.has-hover ? #333941 : transparent;
-
-                                    HorizontalLayout {
-                                        padding-left: 6px;
-                                        padding-right: 6px;
-
-                                        Text {
-                                            text: crumb.name;
-                                            color: #d8dde3;
-                                            font-size: 13px;
-                                            vertical-alignment: center;
-                                        }
+                                    Text {
+                                        text: "›";
+                                        color: #6d747c;
+                                        font-size: 13px;
+                                        vertical-alignment: center;
+                                        horizontal-stretch: 0;
                                     }
 
-                                    crumb-touch := TouchArea {
-                                        clicked => { root.open-crumb(crumb.value); }
+                                    Rectangle {
+                                        height: 24px;
+                                        horizontal-stretch: 0;
+                                        border-radius: 5px;
+                                        background: crumb-touch.has-hover ? #333941 : transparent;
+
+                                        HorizontalLayout {
+                                            padding-left: 6px;
+                                            padding-right: 6px;
+
+                                            Text {
+                                                text: crumb.name;
+                                                color: #d8dde3;
+                                                font-size: 13px;
+                                                vertical-alignment: center;
+                                            }
+                                        }
+
+                                        crumb-touch := TouchArea {
+                                            clicked => { root.open-crumb(crumb.value); }
+                                        }
                                     }
                                 }
                             }
@@ -537,12 +564,14 @@ export component AppWindow inherits Window {
                 }
 
                 ToolButton {
-                    label: "⟳";
+                    icon: Icons.refresh;
+                    has-icon: true;
                     clicked => { root.refresh(); }
                 }
 
                 ToolButton {
-                    label: "⛶";
+                    icon: Icons.expand;
+                    has-icon: true;
                     clicked => { root.toggle-fullscreen(); }
                 }
             }
