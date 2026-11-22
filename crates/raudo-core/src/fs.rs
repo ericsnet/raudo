@@ -11,8 +11,9 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use windows::Win32::Foundation::{FILETIME, GetLastError, HANDLE, SYSTEMTIME};
 use windows::Win32::Storage::FileSystem::{
-    FIND_FIRST_EX_FLAGS, FileTimeToLocalFileTime, FindClose, FindExInfoBasic,
-    FindExSearchNameMatch, FindFirstFileExW, FindNextFileW, WIN32_FIND_DATAW,
+    FILE_FLAGS_AND_ATTRIBUTES, FIND_FIRST_EX_FLAGS, FileTimeToLocalFileTime, FindClose,
+    FindExInfoBasic, FindExSearchNameMatch, FindFirstFileExW, FindNextFileW, GetFileAttributesW,
+    SetFileAttributesW, WIN32_FIND_DATAW,
 };
 use windows::Win32::System::Time::FileTimeToSystemTime;
 use windows::core::PCWSTR;
@@ -125,6 +126,37 @@ pub fn list_dir(path: &Path) -> Result<Vec<Entry>, ListError> {
     entries.sort_by(entry_name_order);
 
     Ok(entries)
+}
+
+/// Marks or unmarks `path` as hidden.
+///
+/// Hiding sets the hidden bit. Un-hiding clears both the hidden and the system
+/// bit so the entry stops being filtered out in either case.
+pub fn set_hidden(path: &Path, hidden: bool) -> Result<(), u32> {
+    let wide: Vec<u16> = path
+        .as_os_str()
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
+    let name = PCWSTR(wide.as_ptr());
+
+    // SAFETY: `wide` is NUL-terminated and lives for the whole function.
+    let current = unsafe { GetFileAttributesW(name) };
+    if current == u32::MAX {
+        // SAFETY: no preconditions; just reads the last error.
+        return Err(unsafe { GetLastError() }.0);
+    }
+
+    let updated = if hidden {
+        current | ATTR_HIDDEN
+    } else {
+        current & !(ATTR_HIDDEN | ATTR_SYSTEM)
+    };
+
+    // SAFETY: `wide` outlives the call and the attributes value keeps every
+    // bit that was already set.
+    unsafe { SetFileAttributesW(name, FILE_FLAGS_AND_ATTRIBUTES(updated)) }
+        .map_err(|error| error.code().0 as u32)
 }
 
 fn entry_name_order(a: &Entry, b: &Entry) -> std::cmp::Ordering {
@@ -255,6 +287,33 @@ mod tests {
     fn reports_missing_directory() {
         let err = list_dir(Path::new("C:\\raudo-does-not-exist")).unwrap_err();
         assert_ne!(err.code, 0);
+    }
+
+    #[test]
+    fn toggles_the_hidden_attribute() {
+        let dir = std::env::temp_dir().join("raudo-hidden-test");
+        let _ = std::fs::create_dir_all(&dir);
+        let file = dir.join("oculto.tmp");
+        std::fs::write(&file, b"x").expect("write test file");
+
+        set_hidden(&file, true).expect("hide");
+        let listed = list_dir(&dir).expect("list dir");
+        let entry = listed
+            .iter()
+            .find(|e| e.name == "oculto.tmp")
+            .expect("entry");
+        assert!(entry.is_hidden, "the entry must be reported as hidden");
+
+        set_hidden(&file, false).expect("unhide");
+        let listed = list_dir(&dir).expect("list dir");
+        let entry = listed
+            .iter()
+            .find(|e| e.name == "oculto.tmp")
+            .expect("entry");
+        assert!(!entry.is_hidden, "the entry must stop being hidden");
+
+        let _ = std::fs::remove_file(&file);
+        let _ = std::fs::remove_dir(&dir);
     }
 
     #[test]

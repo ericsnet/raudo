@@ -2,3 +2,8 @@
 /target-*/
 /artifacts/
 *.pdb
+/docs/BENCHMARKS.md
+/docs/DECISIONS.md
+/docs/RELEASE_TEMPLATE.md
+/docs/UI_PLAN.md
+/docs/UI_REFERENCE.md

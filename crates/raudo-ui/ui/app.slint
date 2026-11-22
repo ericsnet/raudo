@@ -24,6 +24,8 @@ global Icons {
     out property <image> chevron: @image-url("../assets/icons/chevron.svg");
     out property <image> sort: @image-url("../assets/icons/sort.svg");
     out property <image> list: @image-url("../assets/icons/list.svg");
+    out property <image> eye: @image-url("../assets/icons/eye.svg");
+    out property <image> eye-off: @image-url("../assets/icons/eye-off.svg");
 }
 
 component KindIcon inherits Image {
@@ -53,6 +55,7 @@ export struct Row {
     label-text: string,
     state-text: string,
     is-dir: bool,
+    is-hidden: bool,
     path: string,
     kind: string,
 }
@@ -238,6 +241,45 @@ component DriveCard inherits Rectangle {
     }
 }
 
+component MenuRow inherits Rectangle {
+    in property <string> text;
+    callback clicked();
+
+    height: 27px;
+    border-radius: 5px;
+    background: mr.has-hover ? #2f353d : transparent;
+
+    HorizontalLayout {
+        padding-left: 10px;
+        padding-right: 10px;
+
+        Text {
+            text: root.text;
+            color: #d7dee6;
+            font-size: 13px;
+            vertical-alignment: center;
+            horizontal-stretch: 1;
+            overflow: elide;
+        }
+    }
+
+    mr := TouchArea {
+        clicked => { root.clicked(); }
+    }
+}
+
+component MenuRule inherits Rectangle {
+    height: 7px;
+
+    Rectangle {
+        y: 3px;
+        height: 1px;
+        width: parent.width - 12px;
+        x: 6px;
+        background: #333a43;
+    }
+}
+
 component FileRow inherits Rectangle {
     in property <string> file-name;
     in property <string> meta;
@@ -246,11 +288,22 @@ component FileRow inherits Rectangle {
     in property <string> label-text;
     in property <string> state-text;
     in property <bool> is-dir;
+    in property <bool> is-hidden;
     in property <bool> selected;
     in property <bool> search-mode;
     in property <string> kind;
     callback select();
     callback activate();
+    callback open-requested();
+    callback open-with-requested();
+    callback copy-path-requested();
+    callback rename-requested();
+    callback delete-requested();
+    callback toggle-hidden-requested();
+    callback new-folder-requested();
+    callback terminal-requested();
+    callback properties-requested();
+    callback refresh-requested();
 
     height: 38px;
     background: root.selected ? #2d3a4e : (row-touch.has-hover ? rgba(40, 46, 54, 0.72) : transparent);
@@ -274,7 +327,7 @@ component FileRow inherits Rectangle {
 
         Text {
             text: root.file-name;
-            color: root.is-dir ? #edf1f6 : #c9cfd6;
+            color: root.is-hidden ? #7d848c : (root.is-dir ? #edf1f6 : #c9cfd6);
             font-size: 14px;
             horizontal-stretch: 1;
             vertical-alignment: center;
@@ -323,7 +376,7 @@ component FileRow inherits Rectangle {
         Text {
             width: 70px;
             text: root.state-text;
-            color: #8b929a;
+            color: root.is-hidden ? #a8c6f5 : #8b929a;
             font-size: 13px;
             vertical-alignment: center;
             overflow: elide;
@@ -337,6 +390,40 @@ component FileRow inherits Rectangle {
         pointer-event(event) => {
             if (event.button == PointerEventButton.right && event.kind == PointerEventKind.down) {
                 root.select();
+                ctx.show();
+            }
+        }
+    }
+
+    ctx := PopupWindow {
+        x: row-touch.mouse-x;
+        y: row-touch.mouse-y;
+        width: 248px;
+        height: 340px;
+        close-policy: close-on-click-outside;
+
+        Rectangle {
+            background: #20242a;
+            border-radius: 8px;
+            border-width: 1px;
+            border-color: #323942;
+
+            VerticalLayout {
+                padding: 4px;
+                spacing: 1px;
+
+                MenuRow { text: "Abrir"; clicked => { ctx.close(); root.open-requested(); } }
+                MenuRow { text: "Abrir con…"; clicked => { ctx.close(); root.open-with-requested(); } }
+                MenuRule {}
+                MenuRow { text: "Copiar ruta"; clicked => { ctx.close(); root.copy-path-requested(); } }
+                MenuRow { text: "Renombrar"; clicked => { ctx.close(); root.rename-requested(); } }
+                MenuRow { text: "Eliminar"; clicked => { ctx.close(); root.delete-requested(); } }
+                MenuRow { text: "Ocultar o mostrar elemento"; clicked => { ctx.close(); root.toggle-hidden-requested(); } }
+                MenuRule {}
+                MenuRow { text: "Nueva carpeta"; clicked => { ctx.close(); root.new-folder-requested(); } }
+                MenuRow { text: "Abrir en terminal"; clicked => { ctx.close(); root.terminal-requested(); } }
+                MenuRow { text: "Propiedades"; clicked => { ctx.close(); root.properties-requested(); } }
+                MenuRow { text: "Refrescar"; clicked => { ctx.close(); root.refresh-requested(); } }
             }
         }
     }
@@ -420,12 +507,13 @@ component BarButton inherits Rectangle {
     in property <string> label;
     in property <image> icon;
     in property <bool> show-chevron: false;
+    in property <bool> checked: false;
     callback clicked();
 
     width: root.label == "" ? 32px : (root.show-chevron ? 112px : 96px);
     height: 30px;
     border-radius: 6px;
-    background: bar.has-hover ? #2b3038 : transparent;
+    background: root.checked ? #2d3542 : (bar.has-hover ? #2b3038 : transparent);
 
     HorizontalLayout {
         padding-left: 8px;
@@ -440,7 +528,7 @@ component BarButton inherits Rectangle {
 
         Text {
             text: root.label;
-            color: #d3dae2;
+            color: root.checked ? #a8c6f5 : #d3dae2;
             font-size: 13px;
             vertical-alignment: center;
             visible: root.label != "";
@@ -513,6 +601,7 @@ export component AppWindow inherits Window {
     in property <bool> search-mode;
     in property <bool> has-selection;
     in property <bool> renaming;
+    in property <bool> show-hidden;
     in-out property <string> rename-text;
     in-out property <string> search-text;
 
@@ -530,6 +619,8 @@ export component AppWindow inherits Window {
     callback sort-by(int);
     callback open-drive(string);
     callback toggle-fullscreen();
+    callback toggle-hidden();
+    callback toggle-row-hidden();
     callback search-changed(string);
     callback menu-open();
     callback menu-open-with();
@@ -792,6 +883,15 @@ export component AppWindow inherits Window {
                     clicked => { root.menu-delete(); }
                 }
 
+                BarDivider {}
+
+                BarButton {
+                    icon: root.show-hidden ? Icons.eye : Icons.eye-off;
+                    label: "Ocultos";
+                    checked: root.show-hidden;
+                    clicked => { root.toggle-hidden(); }
+                }
+
                 Rectangle {
                     horizontal-stretch: 1;
                     background: transparent;
@@ -854,54 +954,6 @@ export component AppWindow inherits Window {
             Rectangle {
                 background: transparent;
 
-                ContextMenuArea {
-                    Menu {
-                        MenuItem {
-                            title: "Abrir";
-                            enabled: root.has-selection;
-                            activated => { root.menu-open(); }
-                        }
-                        MenuItem {
-                            title: "Abrir con...";
-                            enabled: root.has-selection;
-                            activated => { root.menu-open-with(); }
-                        }
-                        MenuSeparator {}
-                        MenuItem {
-                            title: "Copiar ruta";
-                            enabled: root.has-selection;
-                            activated => { root.menu-copy-path(); }
-                        }
-                        MenuItem {
-                            title: "Renombrar";
-                            enabled: root.has-selection;
-                            activated => { root.menu-rename(); }
-                        }
-                        MenuItem {
-                            title: "Eliminar";
-                            enabled: root.has-selection;
-                            activated => { root.menu-delete(); }
-                        }
-                        MenuSeparator {}
-                        MenuItem {
-                            title: "Nueva carpeta";
-                            activated => { root.menu-new-folder(); }
-                        }
-                        MenuItem {
-                            title: "Abrir en terminal";
-                            activated => { root.menu-terminal(); }
-                        }
-                        MenuItem {
-                            title: "Propiedades";
-                            activated => { root.menu-properties(); }
-                        }
-                        MenuItem {
-                            title: "Refrescar";
-                            activated => { root.refresh(); }
-                        }
-                    }
-
-                    VerticalLayout {
                         if root.is-home : VerticalLayout {
                     padding: 24px;
                     spacing: 12px;
@@ -1093,11 +1145,22 @@ export component AppWindow inherits Window {
                             label-text: row.label-text;
                             state-text: row.state-text;
                             is-dir: row.is-dir;
+                            is-hidden: row.is-hidden;
                             kind: row.kind;
                             selected: i == root.selected-index;
                             search-mode: root.search-mode;
                             select => { root.select-row(i); }
                             activate => { root.open-row(i); }
+                            open-requested => { root.menu-open(); }
+                            open-with-requested => { root.menu-open-with(); }
+                            copy-path-requested => { root.menu-copy-path(); }
+                            rename-requested => { root.menu-rename(); }
+                            delete-requested => { root.menu-delete(); }
+                            toggle-hidden-requested => { root.toggle-row-hidden(); }
+                            new-folder-requested => { root.menu-new-folder(); }
+                            terminal-requested => { root.menu-terminal(); }
+                            properties-requested => { root.menu-properties(); }
+                            refresh-requested => { root.refresh(); }
                         }
                     }
 
@@ -1115,8 +1178,6 @@ export component AppWindow inherits Window {
                                 font-size: 11px;
                                 vertical-alignment: center;
                             }
-                        }
-                    }
                         }
                     }
                 }

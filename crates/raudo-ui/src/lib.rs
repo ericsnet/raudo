@@ -53,6 +53,8 @@ struct State {
     tabs: Vec<TabState>,
     active: usize,
     renaming: Option<PathBuf>,
+    /// Hidden and system entries are filtered out of the list unless this is on.
+    show_hidden: bool,
 }
 
 impl State {
@@ -83,6 +85,8 @@ pub fn run(
         tabs: vec![TabState::new(start.clone())],
         active: 0,
         renaming: None,
+        // `RAUDO_SHOW_HIDDEN=1` arranca con los ocultos a la vista.
+        show_hidden: std::env::var_os("RAUDO_SHOW_HIDDEN").is_some_and(|v| !v.is_empty()),
     }));
 
     ui.set_drives(ModelRc::new(VecModel::from(
@@ -512,6 +516,37 @@ fn wire_callbacks(ui: &AppWindow, state: &Shared) {
         }
     });
 
+    ui.on_toggle_hidden({
+        let ui_weak = ui.as_weak();
+        let state = Arc::clone(state);
+        move || {
+            let Some(ui) = ui_weak.upgrade() else {
+                return;
+            };
+            {
+                let mut s = state.lock().unwrap();
+                s.show_hidden = !s.show_hidden;
+            }
+            render(&ui, &state.lock().unwrap());
+        }
+    });
+
+    ui.on_toggle_row_hidden({
+        let ui_weak = ui.as_weak();
+        let state = Arc::clone(state);
+        move || {
+            let Some(ui) = ui_weak.upgrade() else {
+                return;
+            };
+            let Some(row) = selected_row(&ui) else {
+                return;
+            };
+            if raudo_core::set_hidden(Path::new(row.path.as_str()), !row.is_hidden).is_ok() {
+                refresh_current(&ui, &state);
+            }
+        }
+    });
+
     ui.on_search_changed({
         let ui_weak = ui.as_weak();
         let state = Arc::clone(state);
@@ -707,15 +742,18 @@ fn render(ui: &AppWindow, state: &State) {
         let base = tab.path.clone().unwrap_or_default();
         tab.entries
             .iter()
+            .filter(|entry| state.show_hidden || !entry.is_hidden)
             .map(|entry| row_for(entry, &base, None))
             .collect()
     } else {
         tab.search_results
             .iter()
+            .filter(|hit| state.show_hidden || !hit.entry.is_hidden)
             .map(|hit| row_for(&hit.entry, &hit.folder, Some(&hit.folder)))
             .collect()
     };
     ui.set_item_count(rows.len() as i32);
+    ui.set_show_hidden(state.show_hidden);
     ui.set_rows(ModelRc::new(VecModel::from(rows)));
     ui.set_search_mode(!tab.query.trim().is_empty());
     ui.set_selected_index(-1);
@@ -771,8 +809,9 @@ fn row_for(entry: &Entry, folder: &Path, show_folder: Option<&Path>) -> Row {
         date: entry.modified_text.as_str().into(),
         type_text: type_text(entry).into(),
         label_text: String::new().into(),
-        state_text: String::new().into(),
+        state_text: if entry.is_hidden { "Oculto" } else { "" }.into(),
         is_dir: entry.is_dir,
+        is_hidden: entry.is_hidden,
         path: folder.join(&entry.name).display().to_string().into(),
         kind: kind_for(&entry.name, entry.is_dir).into(),
     }

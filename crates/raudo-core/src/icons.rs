@@ -170,7 +170,7 @@ mod tests {
         let mut opaque = 0;
         let mut black_opaque = 0;
         let mut white_opaque = 0;
-        for pixel in folder.pixels.chunks_exact(4) {
+        for pixel in folder.pixels.chunks(4) {
             if pixel[3] == 0 {
                 transparent += 1;
             } else {
@@ -190,7 +190,7 @@ mod tests {
             if let Some(ic) = icon(key) {
                 let mut t = 0;
                 let mut b = 0;
-                for p in ic.pixels.chunks_exact(4) {
+                for p in ic.pixels.chunks(4) {
                     if p[3] == 0 {
                         t += 1
                     } else if p[0] < 8 && p[1] < 8 && p[2] < 8 {

@@ -1,5 +1,10 @@
 # Raudo
 
+![Raudo en 19 segundos: 17 ms para abrir, 47,27 ms para listar 25.429 archivos](docs/media/raudo-launch.gif)
+
+**17 ms** para la primera ventana · **47,27 ms** para listar 25.429 archivos · **78,9 MB** en reposo.
+Vídeo completo (1080p, con sonido): [raudo-launch.mp4](docs/media/raudo-launch.mp4).
+
 Un explorador de archivos para Windows, escrito en Rust, que abre al instante
 y no se queda pensando.
 
@@ -8,6 +13,15 @@ large fetch) en lugar de pedirle cada carpeta al shell de Windows, y dibuja la
 lista de forma virtualizada con Slint. El objetivo es el acabado visual de los
 exploradores modernos sin su coste: fondo propio, iconos cuidados y menú
 contextual, con arranque y navegación inmediatos.
+
+## Novedades 0.1.1
+
+- Los **archivos ocultos** quedan fuera del listado por defecto, como en el Explorador.
+- Botón **`Ocultos`** en la barra de acciones para mostrarlos u ocultarlos; al mostrarlos
+  salen con el nombre atenuado y la columna `Estado` en `Oculto`.
+- Clic derecho → **Ocultar o mostrar elemento** aplica el atributo al archivo elegido
+  (`SetFileAttributesW`, conservando el resto de atributos).
+- El filtro también afecta a los resultados de búsqueda.
 
 ## Estado
 

@@ -10,7 +10,7 @@ pub mod walk;
 pub mod wallpaper;
 
 pub use drives::{DriveInfo, drives};
-pub use fs::{Entry, ListError, SortDir, SortKey, format_size, list_dir, sort_entries};
+pub use fs::{Entry, ListError, SortDir, SortKey, format_size, list_dir, set_hidden, sort_entries};
 pub use icons::ShellIcon;
 pub use known_folders::{KnownFolder, known_folders};
 pub use walk::{Hit, RESULT_LIMIT, search};
