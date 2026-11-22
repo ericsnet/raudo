@@ -1,138 +1,713 @@
-// Fase 0 shell. Visual work (backgrounds, icons, context menu) lands in Fase 4.
+// Raudo — shell layout: tab strip, navigation bar, sidebar, home and list.
 
-import { ListView } from "std-widgets.slint";
+import { ListView, ScrollView } from "std-widgets.slint";
 
 export struct Row {
     name: string,
     meta: string,
+    date: string,
     is-dir: bool,
 }
 
-component NavButton inherits Rectangle {
+export struct Crumb {
+    name: string,
+    value: string,
+}
+
+export struct TabItem {
+    title: string,
+}
+
+export struct Drive {
+    letter: string,
+    label: string,
+    detail: string,
+    usage: float,
+    root: string,
+}
+
+export struct NavItem {
+    label: string,
+    path: string,
+}
+
+component ToolButton inherits Rectangle {
     in property <string> label;
+    in property <bool> enabled: true;
     callback clicked();
 
-    width: 28px;
-    height: 26px;
+    width: 30px;
+    height: 28px;
     border-radius: 6px;
-    background: nav-touch.has-hover ? #243040 : #1a222b;
+    background: enabled && touch.has-hover ? #2f343b : transparent;
 
     Text {
         text: root.label;
-        color: #d5dee9;
-        font-size: 14px;
+        color: root.enabled ? #d6dbe1 : #5a6068;
+        font-size: 15px;
         horizontal-alignment: center;
         vertical-alignment: center;
     }
 
-    nav-touch := TouchArea {
+    touch := TouchArea {
+        clicked => {
+            if (root.enabled) {
+                root.clicked();
+            }
+        }
+    }
+}
+
+component NavEntry inherits Rectangle {
+    in property <string> label;
+    in property <bool> active;
+    callback clicked();
+
+    height: 30px;
+    border-radius: 6px;
+    background: touch.has-hover ? #2a2f36 : (root.active ? #2d3542 : transparent);
+
+    HorizontalLayout {
+        padding-left: 10px;
+        padding-right: 8px;
+        spacing: 8px;
+
+        Rectangle {
+            width: 3px;
+            height: 14px;
+            border-radius: 2px;
+            background: root.active ? #5b9dff : transparent;
+        }
+
+        Text {
+            text: root.label;
+            color: root.active ? #eef1f5 : #c2c8cf;
+            font-size: 13px;
+            vertical-alignment: center;
+            horizontal-stretch: 1;
+            overflow: elide;
+        }
+    }
+
+    touch := TouchArea {
         clicked => { root.clicked(); }
+    }
+}
+
+component SectionLabel inherits Text {
+    color: #7d848c;
+    font-size: 11px;
+    letter-spacing: 0.6px;
+    height: 26px;
+    vertical-alignment: bottom;
+}
+
+component DriveCard inherits Rectangle {
+    in property <Drive> drive;
+    callback open();
+
+    height: 86px;
+    border-radius: 10px;
+    background: touch.has-hover ? #2b3038 : #23272d;
+
+    VerticalLayout {
+        padding: 12px;
+        spacing: 6px;
+
+        HorizontalLayout {
+            spacing: 8px;
+
+            Rectangle {
+                width: 22px;
+                height: 22px;
+                border-radius: 6px;
+                background: #39404a;
+
+                Text {
+                    text: root.drive.letter;
+                    color: #d7dde4;
+                    font-size: 10px;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+            }
+
+            Text {
+                text: root.drive.label;
+                color: #e9edf2;
+                font-size: 13px;
+                vertical-alignment: center;
+                horizontal-stretch: 1;
+                overflow: elide;
+            }
+        }
+
+        Text {
+            text: root.drive.detail;
+            color: #9aa1a9;
+            font-size: 11px;
+            overflow: elide;
+        }
+
+        Rectangle {
+            height: 4px;
+            border-radius: 2px;
+            background: #343a42;
+
+            Rectangle {
+                width: parent.width * root.drive.usage;
+                height: parent.height;
+                border-radius: 2px;
+                background: root.drive.usage > 0.9 ? #e06c6c : #5b9dff;
+            }
+        }
+    }
+
+    touch := TouchArea {
+        clicked => { root.open(); }
     }
 }
 
 component FileRow inherits Rectangle {
     in property <string> file-name;
     in property <string> meta;
+    in property <string> date;
     in property <bool> is-dir;
+    in property <bool> selected;
+    callback select();
     callback activate();
 
-    height: 26px;
-    background: row-touch.has-hover ? #1b2430 : transparent;
+    height: 27px;
+    background: root.selected ? #2d3a4e : (row-touch.has-hover ? #22262c : transparent);
 
     HorizontalLayout {
+        padding-left: 14px;
+        padding-right: 16px;
         spacing: 10px;
-        padding-left: 12px;
-        padding-right: 12px;
 
         Text {
-            width: 12px;
+            width: 10px;
             text: root.is-dir ? "›" : "";
-            color: #6ea8fe;
-            font-size: 14px;
+            color: #5b9dff;
             vertical-alignment: center;
         }
 
         Text {
             text: root.file-name;
-            color: root.is-dir ? #e9eff7 : #c4cdd8;
+            color: root.is-dir ? #edf1f6 : #c9cfd6;
             horizontal-stretch: 1;
             vertical-alignment: center;
             overflow: elide;
         }
 
         Text {
+            width: 86px;
             text: root.meta;
-            color: #75818f;
+            color: #8b929a;
             font-size: 12px;
-            vertical-alignment: center;
             horizontal-alignment: right;
+            vertical-alignment: center;
+        }
+
+        Text {
+            width: 132px;
+            text: root.date;
+            color: #7d848c;
+            font-size: 12px;
+            horizontal-alignment: right;
+            vertical-alignment: center;
         }
     }
 
     row-touch := TouchArea {
+        clicked => { root.select(); }
         double-clicked => { root.activate(); }
+    }
+}
+
+component TabView inherits Rectangle {
+    in property <string> title;
+    in property <bool> active;
+    callback selected();
+    callback close();
+
+    width: 172px;
+    height: 32px;
+    border-radius: 8px;
+    background: root.active ? #2a2f36 : transparent;
+
+    HorizontalLayout {
+        padding-left: 10px;
+        padding-right: 5px;
+        spacing: 4px;
+
+        Text {
+            text: root.title;
+            color: root.active ? #eef1f5 : #9aa1a9;
+            font-size: 12px;
+            vertical-alignment: center;
+            horizontal-stretch: 1;
+            overflow: elide;
+        }
+
+        Rectangle {
+            width: 20px;
+            height: 20px;
+            border-radius: 5px;
+            background: close-touch.has-hover ? #3d434b : transparent;
+
+            Text {
+                text: "×";
+                color: #b3b9c0;
+                font-size: 13px;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+
+            close-touch := TouchArea {
+                clicked => { root.close(); }
+            }
+        }
+    }
+
+    select-touch := TouchArea {
+        clicked => { root.selected(); }
     }
 }
 
 export component AppWindow inherits Window {
     in property <string> current-path;
     in property <[Row]> rows;
-    callback open-row(int);
+    in property <[Crumb]> crumbs;
+    in property <[TabItem]> tabs;
+    in property <[Drive]> drives;
+    in property <[NavItem]> pinned;
+    in property <int> active-tab;
+    in property <bool> can-back;
+    in property <bool> can-forward;
+    in property <bool> is-home;
+    in property <int> selected-index: -1;
+    in property <int> sort-key: 0;
+    in property <int> sort-dir: 0;
+    in property <int> item-count;
+    in property <image> background-image;
+
+    callback select-tab(int);
+    callback close-tab(int);
+    callback new-tab();
+    callback go-back();
+    callback go-forward();
     callback go-up();
+    callback go-home();
+    callback refresh();
+    callback open-crumb(string);
+    callback open-row(int);
+    callback select-row(int);
+    callback sort-by(int);
+    callback open-drive(string);
+    callback toggle-fullscreen();
 
     title: "Raudo";
-    width: 1080px;
-    height: 700px;
-    background: #0f1216;
+    min-width: 900px;
+    min-height: 560px;
+    background: #131519;
+
+    Rectangle {
+        background: #131519;
+    }
+
+    Image {
+        x: 0;
+        y: 0;
+        width: parent.width;
+        height: parent.height;
+        source: root.background-image;
+        image-fit: cover;
+        opacity: 0.42;
+    }
+
+    Rectangle {
+        background: #0e1013;
+        opacity: 0.55;
+    }
 
     VerticalLayout {
+        // ── Tab strip ────────────────────────────────────────────
         Rectangle {
-            height: 46px;
-            background: #141a21;
+            height: 40px;
+            background: #15171b;
 
             HorizontalLayout {
-                padding-left: 12px;
-                padding-right: 12px;
-                spacing: 10px;
+                padding-left: 10px;
+                padding-right: 10px;
+                spacing: 4px;
 
-                NavButton {
-                    label: "↑";
-                    clicked => { root.go-up(); }
+                for tab[i] in root.tabs : TabView {
+                    title: tab.title;
+                    active: i == root.active-tab;
+                    selected => { root.select-tab(i); }
+                    close => { root.close-tab(i); }
                 }
 
-                Text {
-                    text: root.current-path;
-                    color: #cfd8e3;
-                    vertical-alignment: center;
-                    horizontal-stretch: 1;
-                    overflow: elide;
-                }
+                Rectangle {
+                    width: 28px;
+                    height: 28px;
+                    border-radius: 6px;
+                    background: plus-touch.has-hover ? #2a2f36 : transparent;
 
-                Text {
-                    text: root.rows.length + " elementos";
-                    color: #75818f;
-                    font-size: 12px;
-                    vertical-alignment: center;
+                    Text {
+                        text: "+";
+                        color: #c2c8cf;
+                        font-size: 16px;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+
+                    plus-touch := TouchArea {
+                        clicked => { root.new-tab(); }
+                    }
                 }
             }
         }
 
+        // ── Navigation bar ───────────────────────────────────────
         Rectangle {
-            background: transparent;
+            height: 46px;
+            background: #1a1c20;
 
-            if root.rows.length == 0 : Text {
-                text: "Carpeta vacía";
-                color: #5f6a78;
-                horizontal-alignment: center;
-                vertical-alignment: center;
+            HorizontalLayout {
+                padding-left: 12px;
+                padding-right: 12px;
+                spacing: 6px;
+
+                ToolButton {
+                    label: "←";
+                    enabled: root.can-back;
+                    clicked => { root.go-back(); }
+                }
+
+                ToolButton {
+                    label: "→";
+                    enabled: root.can-forward;
+                    clicked => { root.go-forward(); }
+                }
+
+                ToolButton {
+                    label: "↑";
+                    enabled: !root.is-home;
+                    clicked => { root.go-up(); }
+                }
+
+                ToolButton {
+                    label: "⌂";
+                    clicked => { root.go-home(); }
+                }
+
+                Rectangle {
+                    height: 30px;
+                    border-radius: 8px;
+                    background: #23272d;
+
+                    HorizontalLayout {
+                        padding-left: 10px;
+                        padding-right: 10px;
+                        spacing: 2px;
+                        alignment: start;
+
+                        Text {
+                            text: root.is-home ? "Inicio" : "";
+                            color: #d8dde3;
+                            font-size: 13px;
+                            vertical-alignment: center;
+                        }
+
+                        if !root.is-home : HorizontalLayout {
+                            horizontal-stretch: 0;
+
+                            for crumb in root.crumbs : HorizontalLayout {
+                                horizontal-stretch: 0;
+
+                                Text {
+                                    text: "›";
+                                    color: #6d747c;
+                                    font-size: 13px;
+                                    vertical-alignment: center;
+                                    horizontal-stretch: 0;
+                                }
+
+                                Rectangle {
+                                    height: 24px;
+                                    horizontal-stretch: 0;
+                                    border-radius: 5px;
+                                    background: crumb-touch.has-hover ? #333941 : transparent;
+
+                                    HorizontalLayout {
+                                        padding-left: 6px;
+                                        padding-right: 6px;
+
+                                        Text {
+                                            text: crumb.name;
+                                            color: #d8dde3;
+                                            font-size: 13px;
+                                            vertical-alignment: center;
+                                        }
+                                    }
+
+                                    crumb-touch := TouchArea {
+                                        clicked => { root.open-crumb(crumb.value); }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Rectangle {
+                    width: 220px;
+                    height: 30px;
+                    border-radius: 8px;
+                    background: #23272d;
+
+                    HorizontalLayout {
+                        padding-left: 10px;
+
+                        Text {
+                            text: "Buscar";
+                            color: #767d85;
+                            font-size: 12px;
+                            vertical-alignment: center;
+                        }
+                    }
+                }
+
+                ToolButton {
+                    label: "⟳";
+                    clicked => { root.refresh(); }
+                }
+
+                ToolButton {
+                    label: "⛶";
+                    clicked => { root.toggle-fullscreen(); }
+                }
+            }
+        }
+
+        HorizontalLayout {
+            // ── Sidebar ──────────────────────────────────────────
+            Rectangle {
+                width: 232px;
+                background: #191b1f;
+
+                ScrollView {
+                    VerticalLayout {
+                        padding-left: 10px;
+                        padding-right: 10px;
+                        padding-top: 10px;
+                        padding-bottom: 10px;
+                        spacing: 2px;
+
+                        NavEntry {
+                            label: "Inicio";
+                            active: root.is-home;
+                            clicked => { root.go-home(); }
+                        }
+
+                        SectionLabel {
+                            text: "ANCLADOS";
+                        }
+
+                        for item in root.pinned : NavEntry {
+                            label: item.label;
+                            active: root.current-path == item.path;
+                            clicked => { root.open-drive(item.path); }
+                        }
+
+                        SectionLabel {
+                            text: "UNIDADES DE DISCO";
+                        }
+
+                        for drive in root.drives : NavEntry {
+                            label: drive.letter + "  " + drive.label;
+                            active: root.current-path == drive.root;
+                            clicked => { root.open-drive(drive.root); }
+                        }
+                    }
+                }
             }
 
-            ListView {
-                for row[i] in root.rows : FileRow {
-                    file-name: row.name;
-                    meta: row.meta;
-                    is-dir: row.is-dir;
-                    activate => { root.open-row(i); }
+            // ── Content ──────────────────────────────────────────
+            Rectangle {
+                background: transparent;
+
+                if root.is-home : VerticalLayout {
+                    padding: 24px;
+                    spacing: 12px;
+
+                    Text {
+                        text: "Inicio";
+                        color: #f2f4f7;
+                        font-size: 24px;
+                        font-weight: 600;
+                        height: 34px;
+                        vertical-stretch: 0;
+                    }
+
+                    Text {
+                        text: "Acceso rápido";
+                        color: #9aa1a9;
+                        font-size: 13px;
+                        height: 20px;
+                        vertical-stretch: 0;
+                    }
+
+                    HorizontalLayout {
+                        height: 88px;
+                        vertical-stretch: 0;
+                        spacing: 12px;
+
+                        for drive in root.drives : DriveCard {
+                            drive: drive;
+                            horizontal-stretch: 1;
+                            open => { root.open-drive(drive.root); }
+                        }
+                    }
+
+                    Text {
+                        text: "Ubicaciones de red";
+                        color: #9aa1a9;
+                        font-size: 13px;
+                        height: 28px;
+                        vertical-stretch: 0;
+                        vertical-alignment: bottom;
+                    }
+
+                    Rectangle {
+                        height: 46px;
+                        vertical-stretch: 0;
+                        border-radius: 8px;
+                        background: #1e2228;
+
+                        HorizontalLayout {
+                            padding-left: 14px;
+
+                            Text {
+                                text: "No hay ubicaciones de red configuradas.";
+                                color: #7d848c;
+                                font-size: 12px;
+                                vertical-alignment: center;
+                            }
+                        }
+                    }
+
+                    Rectangle {
+                        vertical-stretch: 1;
+                        background: transparent;
+                    }
+                }
+
+                if !root.is-home : VerticalLayout {
+                    Rectangle {
+                        height: 30px;
+                        background: #1b1e22;
+
+                        HorizontalLayout {
+                            padding-left: 14px;
+                            padding-right: 16px;
+                            spacing: 10px;
+
+                            Rectangle {
+                                horizontal-stretch: 1;
+                                background: transparent;
+
+                                Text {
+                                    text: root.sort-key == 0 ? (root.sort-dir == 0 ? "Nombre ↑" : "Nombre ↓") : "Nombre";
+                                    color: root.sort-key == 0 ? #a8c6f5 : #8b929a;
+                                    font-size: 11px;
+                                    width: parent.width;
+                                    horizontal-alignment: left;
+                                    vertical-alignment: center;
+                                }
+
+                                TouchArea {
+                                    clicked => { root.sort-by(0); }
+                                }
+                            }
+
+                            Rectangle {
+                                width: 86px;
+                                background: transparent;
+
+                                Text {
+                                    text: root.sort-key == 1 ? (root.sort-dir == 0 ? "Tamaño ↑" : "Tamaño ↓") : "Tamaño";
+                                    color: root.sort-key == 1 ? #a8c6f5 : #8b929a;
+                                    font-size: 11px;
+                                    horizontal-alignment: right;
+                                    vertical-alignment: center;
+                                }
+
+                                TouchArea {
+                                    clicked => { root.sort-by(1); }
+                                }
+                            }
+
+                            Rectangle {
+                                width: 132px;
+                                background: transparent;
+
+                                Text {
+                                    text: root.sort-key == 2 ? (root.sort-dir == 0 ? "Fecha ↑" : "Fecha ↓") : "Fecha";
+                                    color: root.sort-key == 2 ? #a8c6f5 : #8b929a;
+                                    font-size: 11px;
+                                    horizontal-alignment: right;
+                                    vertical-alignment: center;
+                                }
+
+                                TouchArea {
+                                    clicked => { root.sort-by(2); }
+                                }
+                            }
+                        }
+                    }
+
+                    if root.rows.length == 0 : Rectangle {
+                        background: transparent;
+
+                        Text {
+                            text: "Carpeta vacía";
+                            color: #5f666e;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                    }
+
+                    ListView {
+                        for row[i] in root.rows : FileRow {
+                            file-name: row.name;
+                            meta: row.meta;
+                            date: row.date;
+                            is-dir: row.is-dir;
+                            selected: i == root.selected-index;
+                            select => { root.select-row(i); }
+                            activate => { root.open-row(i); }
+                        }
+                    }
+
+                    Rectangle {
+                        height: 26px;
+                        background: #1b1e22;
+
+                        HorizontalLayout {
+                            padding-left: 14px;
+                            padding-right: 16px;
+
+                            Text {
+                                text: root.item-count + " elementos";
+                                color: #767d85;
+                                font-size: 11px;
+                                vertical-alignment: center;
+                            }
+                        }
+                    }
                 }
             }
         }

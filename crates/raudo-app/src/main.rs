@@ -22,12 +22,11 @@ fn main() -> Result<(), raudo_ui::PlatformError> {
             .unwrap_or_else(|| std::env::temp_dir().join("raudo-trace.txt"))
     });
 
+    // No argument opens the home page; a path opens that folder.
     let start_dir = std::env::args()
         .nth(1)
         .map(PathBuf::from)
-        .filter(|p| p.is_dir())
-        .or_else(|| std::env::current_dir().ok())
-        .unwrap_or_else(|| PathBuf::from("C:\\"));
+        .filter(|path| path.is_dir());
 
     raudo_ui::run(start_dir, trace, started)
 }

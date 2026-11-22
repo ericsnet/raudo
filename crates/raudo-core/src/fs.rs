@@ -9,11 +9,12 @@ use std::os::windows::ffi::{OsStrExt, OsStringExt};
 use std::path::Path;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use windows::Win32::Foundation::{FILETIME, GetLastError, HANDLE};
+use windows::Win32::Foundation::{FILETIME, GetLastError, HANDLE, SYSTEMTIME};
 use windows::Win32::Storage::FileSystem::{
-    FIND_FIRST_EX_FLAGS, FindClose, FindExInfoBasic, FindExSearchNameMatch, FindFirstFileExW,
-    FindNextFileW, WIN32_FIND_DATAW,
+    FIND_FIRST_EX_FLAGS, FileTimeToLocalFileTime, FindClose, FindExInfoBasic,
+    FindExSearchNameMatch, FindFirstFileExW, FindNextFileW, WIN32_FIND_DATAW,
 };
+use windows::Win32::System::Time::FileTimeToSystemTime;
 use windows::core::PCWSTR;
 
 /// Return basic data (name, size, timestamps, attributes) instead of the
@@ -39,6 +40,24 @@ pub struct Entry {
     pub is_reparse_point: bool,
     pub size: u64,
     pub modified: Option<SystemTime>,
+    /// Local-time date shown in the file list, e.g. `22/11/2026 13:05`.
+    pub modified_text: String,
+}
+
+/// Column used to order a directory listing.
+#[repr(i32)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SortKey {
+    Name = 0,
+    Size = 1,
+    Modified = 2,
+}
+
+/// Ordering direction inside each group (directories are always first).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SortDir {
+    Asc,
+    Desc,
 }
 
 /// A directory could not be listed.
@@ -103,13 +122,32 @@ pub fn list_dir(path: &Path) -> Result<Vec<Entry>, ListError> {
         let _ = FindClose(handle);
     }
 
-    entries.sort_by(|a, b| {
-        b.is_dir
-            .cmp(&a.is_dir)
-            .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
-    });
+    entries.sort_by(entry_name_order);
 
     Ok(entries)
+}
+
+fn entry_name_order(a: &Entry, b: &Entry) -> std::cmp::Ordering {
+    b.is_dir
+        .cmp(&a.is_dir)
+        .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+}
+
+/// Re-orders an already loaded listing. Directories stay grouped first.
+pub fn sort_entries(entries: &mut [Entry], key: SortKey, dir: SortDir) {
+    entries.sort_by(|a, b| {
+        b.is_dir.cmp(&a.is_dir).then_with(|| {
+            let order = match key {
+                SortKey::Name => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+                SortKey::Size => a.size.cmp(&b.size),
+                SortKey::Modified => a.modified.cmp(&b.modified),
+            };
+            match dir {
+                SortDir::Asc => order,
+                SortDir::Desc => order.reverse(),
+            }
+        })
+    });
 }
 
 fn entry_from(data: &WIN32_FIND_DATAW) -> Option<Entry> {
@@ -143,7 +181,27 @@ fn entry_from(data: &WIN32_FIND_DATAW) -> Option<Entry> {
             ((data.nFileSizeHigh as u64) << 32) | data.nFileSizeLow as u64
         },
         modified: filetime_to_system_time(&data.ftLastWriteTime),
+        modified_text: filetime_text(&data.ftLastWriteTime),
     })
+}
+
+/// Local date and time for the file list, or an empty string when the
+/// timestamp cannot be converted.
+fn filetime_text(ft: &FILETIME) -> String {
+    let mut local = FILETIME::default();
+    let mut st = SYSTEMTIME::default();
+    // SAFETY: both pointers reference writable, correctly sized structs.
+    let converted = unsafe {
+        FileTimeToLocalFileTime(ft, &mut local).is_ok()
+            && FileTimeToSystemTime(&local, &mut st).is_ok()
+    };
+    if !converted {
+        return String::new();
+    }
+    format!(
+        "{:02}/{:02}/{:04} {:02}:{:02}",
+        st.wDay, st.wMonth, st.wYear, st.wHour, st.wMinute
+    )
 }
 
 fn filetime_to_system_time(ft: &FILETIME) -> Option<SystemTime> {
