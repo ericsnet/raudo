@@ -21,6 +21,10 @@ Bugs y decisiones flojas detectadas en la primera versión con estructura de exp
 7. **Sin iconos de archivo/carpeta.** Diferencia visual más grande contra el Explorador.
 8. **Sin fondo.** Soportado por archivo (`%APPDATA%\Raudo\background.png` o
    `RAUDO_BACKGROUND`), pero no hay imagen por defecto ni ajustes.
+9. **Ventana que se encogía al hacer clic.** Slint derivaba el tamaño máximo de la
+   ventana del layout y lo fijaba en el ancho mínimo del contenido (572 px): Windows
+   recortaba la ventana a ese máximo en cuanto reaplicaba restricciones (maximizar,
+   clic, repintado). Corregido fijando `max-width`/`max-height` amplios en la Window.
 
 ## Principios
 

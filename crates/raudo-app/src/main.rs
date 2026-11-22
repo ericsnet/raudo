@@ -34,13 +34,12 @@ fn main() -> Result<(), raudo_ui::PlatformError> {
     raudo_ui::run(start_dir, trace, started)
 }
 
-fn log_dir() -> Option<PathBuf> {
-    std::env::var_os("APPDATA").map(|dir| PathBuf::from(dir).join("Raudo"))
-}
-
 fn install_panic_log() {
     std::panic::set_hook(Box::new(|info| {
-        let Some(dir) = log_dir() else { return };
+        let Some(appdata) = std::env::var_os("APPDATA") else {
+            return;
+        };
+        let dir = PathBuf::from(appdata).join("Raudo");
         let _ = std::fs::create_dir_all(&dir);
         if let Ok(mut file) = std::fs::OpenOptions::new()
             .create(true)

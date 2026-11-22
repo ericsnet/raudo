@@ -425,6 +425,10 @@ export component AppWindow inherits Window {
 
     title: "Raudo";
     icon: @image-url("../assets/icons/app.svg");
+    // Slint derives the window's maximum size from the layout, which caps it
+    // at the content's minimum width and makes the OS clip the window.
+    max-width: 100000px;
+    max-height: 100000px;
     background: #131519;
 
     Rectangle {
@@ -447,9 +451,6 @@ export component AppWindow inherits Window {
     }
 
     VerticalLayout {
-        width: parent.width;
-        height: parent.height;
-
         // ── Tab strip ────────────────────────────────────────────
         Rectangle {
             height: 40px;

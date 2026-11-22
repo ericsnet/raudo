@@ -112,22 +112,6 @@ pub fn run(
         }
     });
 
-    if std::env::var_os("RAUDO_TEST_REFRESH").is_some() {
-        let weak = ui.as_weak();
-        let state = Arc::clone(&state);
-        let timer = slint::Timer::default();
-        timer.start(
-            slint::TimerMode::Repeated,
-            std::time::Duration::from_secs(2),
-            move || {
-                if let Some(ui) = weak.upgrade() {
-                    render(&ui, &state.lock().unwrap());
-                }
-            },
-        );
-        std::mem::forget(timer);
-    }
-
     if let Some(path) = trace {
         let _ = std::fs::write(
             path,
