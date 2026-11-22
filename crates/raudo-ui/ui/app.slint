@@ -2,12 +2,47 @@
 
 import { ListView, ScrollView } from "std-widgets.slint";
 
+global Icons {
+    out property <image> folder: @image-url("../assets/icons/folder.svg");
+    out property <image> file: @image-url("../assets/icons/file.svg");
+    out property <image> exe: @image-url("../assets/icons/exe.svg");
+    out property <image> image: @image-url("../assets/icons/image.svg");
+    out property <image> audio: @image-url("../assets/icons/audio.svg");
+    out property <image> video: @image-url("../assets/icons/video.svg");
+    out property <image> archive: @image-url("../assets/icons/archive.svg");
+    out property <image> code: @image-url("../assets/icons/code.svg");
+    out property <image> drive: @image-url("../assets/icons/drive.svg");
+    out property <image> home: @image-url("../assets/icons/home.svg");
+    out property <image> download: @image-url("../assets/icons/download.svg");
+    out property <image> document: @image-url("../assets/icons/document.svg");
+}
+
+component KindIcon inherits Image {
+    in property <string> kind;
+    width: 18px;
+    height: 18px;
+    image-fit: contain;
+    source: kind == "folder" ? Icons.folder
+        : kind == "drive" ? Icons.drive
+        : kind == "home" ? Icons.home
+        : kind == "download" ? Icons.download
+        : kind == "document" ? Icons.document
+        : kind == "image" ? Icons.image
+        : kind == "audio" ? Icons.audio
+        : kind == "video" ? Icons.video
+        : kind == "archive" ? Icons.archive
+        : kind == "code" ? Icons.code
+        : kind == "exe" ? Icons.exe
+        : Icons.file;
+}
+
 export struct Row {
     name: string,
     meta: string,
     date: string,
     is-dir: bool,
     path: string,
+    kind: string,
 }
 
 export struct Crumb {
@@ -30,6 +65,7 @@ export struct Drive {
 export struct NavItem {
     label: string,
     path: string,
+    kind: string,
 }
 
 component ToolButton inherits Rectangle {
@@ -61,6 +97,7 @@ component ToolButton inherits Rectangle {
 
 component NavEntry inherits Rectangle {
     in property <string> label;
+    in property <string> kind;
     in property <bool> active;
     callback clicked();
 
@@ -78,6 +115,12 @@ component NavEntry inherits Rectangle {
             height: 14px;
             border-radius: 2px;
             background: root.active ? #5b9dff : transparent;
+        }
+
+        KindIcon {
+            kind: root.kind;
+            width: 16px;
+            height: 16px;
         }
 
         Text {
@@ -118,19 +161,10 @@ component DriveCard inherits Rectangle {
         HorizontalLayout {
             spacing: 8px;
 
-            Rectangle {
-                width: 22px;
-                height: 22px;
-                border-radius: 6px;
-                background: #39404a;
-
-                Text {
-                    text: root.drive.letter;
-                    color: #d7dde4;
-                    font-size: 10px;
-                    horizontal-alignment: center;
-                    vertical-alignment: center;
-                }
+            KindIcon {
+                kind: "drive";
+                width: 20px;
+                height: 20px;
             }
 
             Text {
@@ -176,6 +210,7 @@ component FileRow inherits Rectangle {
     in property <bool> is-dir;
     in property <bool> selected;
     in property <bool> search-mode;
+    in property <string> kind;
     callback select();
     callback activate();
 
@@ -187,11 +222,10 @@ component FileRow inherits Rectangle {
         padding-right: 16px;
         spacing: 10px;
 
-        Text {
-            width: 10px;
-            text: root.is-dir ? "›" : "";
-            color: #5b9dff;
-            vertical-alignment: center;
+        KindIcon {
+            kind: root.kind;
+            width: 18px;
+            height: 18px;
         }
 
         Text {
@@ -530,6 +564,7 @@ export component AppWindow inherits Window {
 
                         NavEntry {
                             label: "Inicio";
+                            kind: "home";
                             active: root.is-home;
                             clicked => { root.go-home(); }
                         }
@@ -540,6 +575,7 @@ export component AppWindow inherits Window {
 
                         for item in root.pinned : NavEntry {
                             label: item.label;
+                            kind: item.kind;
                             active: root.current-path == item.path;
                             clicked => { root.open-drive(item.path); }
                         }
@@ -550,6 +586,7 @@ export component AppWindow inherits Window {
 
                         for drive in root.drives : NavEntry {
                             label: drive.letter + "  " + drive.label;
+                            kind: "drive";
                             active: root.current-path == drive.root;
                             clicked => { root.open-drive(drive.root); }
                         }
@@ -708,6 +745,7 @@ export component AppWindow inherits Window {
                             meta: row.meta;
                             date: row.date;
                             is-dir: row.is-dir;
+                            kind: row.kind;
                             selected: i == root.selected-index;
                             search-mode: root.search-mode;
                             select => { root.select-row(i); }

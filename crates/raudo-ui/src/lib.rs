@@ -567,6 +567,28 @@ fn row_for(entry: &Entry, folder: &Path, show_folder: Option<&Path>) -> Row {
         date: entry.modified_text.as_str().into(),
         is_dir: entry.is_dir,
         path: folder.join(&entry.name).display().to_string().into(),
+        kind: kind_for(&entry.name, entry.is_dir).into(),
+    }
+}
+
+fn kind_for(name: &str, is_dir: bool) -> &'static str {
+    if is_dir {
+        return "folder";
+    }
+    let extension = name
+        .rsplit_once('.')
+        .map(|(_, ext)| ext.to_ascii_lowercase())
+        .unwrap_or_default();
+    match extension.as_str() {
+        "exe" | "msi" | "bat" | "cmd" | "com" | "ps1" => "exe",
+        "png" | "jpg" | "jpeg" | "gif" | "bmp" | "webp" | "svg" | "ico" | "tif" | "tiff" => "image",
+        "mp3" | "wav" | "flac" | "ogg" | "m4a" | "aac" | "wma" => "audio",
+        "mp4" | "mkv" | "avi" | "mov" | "wmv" | "webm" | "m4v" => "video",
+        "zip" | "rar" | "7z" | "tar" | "gz" | "bz2" | "xz" | "iso" => "archive",
+        "rs" | "js" | "ts" | "tsx" | "jsx" | "py" | "c" | "h" | "cpp" | "hpp" | "cs" | "java"
+        | "go" | "rb" | "php" | "html" | "css" | "scss" | "json" | "toml" | "yaml" | "yml"
+        | "xml" | "sh" | "md" => "code",
+        _ => "file",
     }
 }
 
@@ -612,9 +634,20 @@ fn crumbs(path: &Path) -> Vec<Crumb> {
 fn pinned_items() -> Vec<NavItem> {
     raudo_core::known_folders()
         .into_iter()
-        .map(|folder| NavItem {
-            label: folder.label.into(),
-            path: path_text(&folder.path).into(),
+        .map(|folder| {
+            let kind = match folder.label.as_str() {
+                "Descargas" => "download",
+                "Documentos" => "document",
+                "Imágenes" => "image",
+                "Música" => "audio",
+                "Vídeos" => "video",
+                _ => "folder",
+            };
+            NavItem {
+                label: folder.label.into(),
+                path: path_text(&folder.path).into(),
+                kind: kind.into(),
+            }
         })
         .collect()
 }
@@ -629,6 +662,9 @@ fn background_image() -> Option<slint::Image> {
         for name in ["background.png", "background.jpg", "background.jpeg"] {
             candidates.push(dir.join(name));
         }
+    }
+    if let Some(wallpaper) = raudo_core::desktop_wallpaper() {
+        candidates.push(wallpaper);
     }
     candidates
         .into_iter()
