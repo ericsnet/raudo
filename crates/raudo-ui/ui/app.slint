@@ -42,6 +42,7 @@ export struct Row {
     name: string,
     meta: string,
     date: string,
+    type-text: string,
     is-dir: bool,
     path: string,
     icon: image,
@@ -235,6 +236,7 @@ component FileRow inherits Rectangle {
     in property <string> file-name;
     in property <string> meta;
     in property <string> date;
+    in property <string> type-text;
     in property <bool> is-dir;
     in property <bool> selected;
     in property <bool> search-mode;
@@ -242,8 +244,8 @@ component FileRow inherits Rectangle {
     callback select();
     callback activate();
 
-    height: 27px;
-    background: root.selected ? #2d3a4e : (row-touch.has-hover ? #22262c : transparent);
+    height: 34px;
+    background: root.selected ? #2d3a4e : (row-touch.has-hover ? rgba(40, 46, 54, 0.72) : transparent);
 
     HorizontalLayout {
         padding-left: 14px;
@@ -251,13 +253,13 @@ component FileRow inherits Rectangle {
         spacing: 10px;
 
         Rectangle {
-            width: 18px;
+            width: 22px;
             background: transparent;
 
             Image {
                 source: root.icon;
-                width: 18px;
-                height: 18px;
+                width: 20px;
+                height: 20px;
                 y: (parent.height - self.height) / 2;
             }
         }
@@ -271,8 +273,8 @@ component FileRow inherits Rectangle {
         }
 
         Text {
-            width: root.search-mode ? 330px : 86px;
-            text: root.meta;
+            width: root.search-mode ? 300px : 150px;
+            text: root.search-mode ? root.meta : root.date;
             color: #8b929a;
             font-size: 12px;
             horizontal-alignment: right;
@@ -281,9 +283,19 @@ component FileRow inherits Rectangle {
         }
 
         Text {
-            width: 132px;
-            text: root.date;
-            color: #7d848c;
+            width: 190px;
+            text: root.type-text;
+            color: #8b929a;
+            font-size: 12px;
+            vertical-alignment: center;
+            overflow: elide;
+            visible: !root.search-mode;
+        }
+
+        Text {
+            width: 90px;
+            text: root.search-mode ? "" : root.meta;
+            color: #8b929a;
             font-size: 12px;
             horizontal-alignment: right;
             vertical-alignment: center;
@@ -375,6 +387,33 @@ component DialogButton inherits Rectangle {
     }
 }
 
+component ActionButton inherits Rectangle {
+    in property <string> label;
+    in property <bool> enabled: true;
+    callback clicked();
+
+    width: 96px;
+    height: 26px;
+    border-radius: 6px;
+    background: root.enabled && act.has-hover ? #2f343b : transparent;
+
+    Text {
+        text: root.label;
+        color: root.enabled ? #cfd8e3 : #5a6068;
+        font-size: 12px;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+
+    act := TouchArea {
+        clicked => {
+            if (root.enabled) {
+                root.clicked();
+            }
+        }
+    }
+}
+
 export component AppWindow inherits Window {
     in property <string> current-path;
     in property <[Row]> rows;
@@ -454,7 +493,7 @@ export component AppWindow inherits Window {
         // ── Tab strip ────────────────────────────────────────────
         Rectangle {
             height: 40px;
-            background: #15171b;
+            background: rgba(21, 23, 27, 0.84);
 
             HorizontalLayout {
                 padding-left: 10px;
@@ -492,7 +531,7 @@ export component AppWindow inherits Window {
         // ── Navigation bar ───────────────────────────────────────
         Rectangle {
             height: 46px;
-            background: #1a1c20;
+            background: rgba(24, 26, 30, 0.82);
 
             HorizontalLayout {
                 padding-left: 12px;
@@ -623,11 +662,54 @@ export component AppWindow inherits Window {
                     has-icon: true;
                     clicked => { root.refresh(); }
                 }
+            }
+        }
 
-                ToolButton {
-                    icon: Icons.expand;
-                    has-icon: true;
-                    clicked => { root.toggle-fullscreen(); }
+        // ── Action bar ───────────────────────────────────────────
+        Rectangle {
+            height: 38px;
+            background: rgba(22, 24, 28, 0.62);
+
+            HorizontalLayout {
+                padding-left: 12px;
+                padding-right: 12px;
+                spacing: 4px;
+
+                ActionButton {
+                    label: "＋ Nuevo";
+                    width: 100px;
+                    clicked => { root.menu-new-folder(); }
+                }
+
+                ActionButton {
+                    label: "Renombrar";
+                    enabled: root.has-selection;
+                    clicked => { root.menu-rename(); }
+                }
+
+                ActionButton {
+                    label: "Copiar ruta";
+                    width: 104px;
+                    enabled: root.has-selection;
+                    clicked => { root.menu-copy-path(); }
+                }
+
+                ActionButton {
+                    label: "Eliminar";
+                    width: 86px;
+                    enabled: root.has-selection;
+                    clicked => { root.menu-delete(); }
+                }
+
+                Rectangle {
+                    horizontal-stretch: 1;
+                    background: transparent;
+                }
+
+                ActionButton {
+                    label: "Refrescar";
+                    width: 86px;
+                    clicked => { root.refresh(); }
                 }
             }
         }
@@ -636,7 +718,7 @@ export component AppWindow inherits Window {
             // ── Sidebar ──────────────────────────────────────────
             Rectangle {
                 width: 232px;
-                background: #191b1f;
+                background: rgba(24, 26, 30, 0.86);
 
                 ScrollView {
                     VerticalLayout {
@@ -799,7 +881,7 @@ export component AppWindow inherits Window {
                 if !root.is-home : VerticalLayout {
                     Rectangle {
                         height: 30px;
-                        background: #1b1e22;
+                        background: rgba(24, 26, 30, 0.72);
 
                         HorizontalLayout {
                             padding-left: 14px;
@@ -825,12 +907,44 @@ export component AppWindow inherits Window {
                             }
 
                             Rectangle {
-                                width: root.search-mode ? 330px : 86px;
+                                width: root.search-mode ? 300px : 150px;
                                 background: transparent;
 
                                 Text {
-                                    text: root.search-mode ? "Ubicación" : (root.sort-key == 1 ? (root.sort-dir == 0 ? "Tamaño ↑" : "Tamaño ↓") : "Tamaño");
-                                    color: root.sort-key == 1 && !root.search-mode ? #a8c6f5 : #8b929a;
+                                    text: root.search-mode ? "Ubicación" : (root.sort-key == 2 ? (root.sort-dir == 0 ? "Fecha de modificación ↑" : "Fecha de modificación ↓") : "Fecha de modificación");
+                                    color: root.sort-key == 2 && !root.search-mode ? #a8c6f5 : #8b929a;
+                                    font-size: 11px;
+                                    horizontal-alignment: right;
+                                    vertical-alignment: center;
+                                    overflow: elide;
+                                }
+
+                                TouchArea {
+                                    clicked => { root.sort-by(2); }
+                                }
+                            }
+
+                            Rectangle {
+                                width: 190px;
+                                background: transparent;
+                                visible: !root.search-mode;
+
+                                Text {
+                                    text: "Tipo";
+                                    color: #8b929a;
+                                    font-size: 11px;
+                                    vertical-alignment: center;
+                                }
+                            }
+
+                            Rectangle {
+                                width: 90px;
+                                background: transparent;
+                                visible: !root.search-mode;
+
+                                Text {
+                                    text: root.sort-key == 1 ? (root.sort-dir == 0 ? "Tamaño ↑" : "Tamaño ↓") : "Tamaño";
+                                    color: root.sort-key == 1 ? #a8c6f5 : #8b929a;
                                     font-size: 11px;
                                     horizontal-alignment: right;
                                     vertical-alignment: center;
@@ -838,23 +952,6 @@ export component AppWindow inherits Window {
 
                                 TouchArea {
                                     clicked => { root.sort-by(1); }
-                                }
-                            }
-
-                            Rectangle {
-                                width: 132px;
-                                background: transparent;
-
-                                Text {
-                                    text: root.sort-key == 2 ? (root.sort-dir == 0 ? "Fecha ↑" : "Fecha ↓") : "Fecha";
-                                    color: root.sort-key == 2 ? #a8c6f5 : #8b929a;
-                                    font-size: 11px;
-                                    horizontal-alignment: right;
-                                    vertical-alignment: center;
-                                }
-
-                                TouchArea {
-                                    clicked => { root.sort-by(2); }
                                 }
                             }
                         }
@@ -876,6 +973,7 @@ export component AppWindow inherits Window {
                             file-name: row.name;
                             meta: row.meta;
                             date: row.date;
+                            type-text: row.type-text;
                             is-dir: row.is-dir;
                             icon: row.icon;
                             selected: i == root.selected-index;

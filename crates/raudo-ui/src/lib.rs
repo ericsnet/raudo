@@ -803,9 +803,38 @@ fn row_for(entry: &Entry, folder: &Path, show_folder: Option<&Path>) -> Row {
         name: entry.name.as_str().into(),
         meta: meta.into(),
         date: entry.modified_text.as_str().into(),
+        type_text: type_text(entry).into(),
         is_dir: entry.is_dir,
         path: folder.join(&entry.name).display().to_string().into(),
         icon: icon_image(icon_key(&entry.name, entry.is_dir)),
+    }
+}
+
+fn type_text(entry: &Entry) -> String {
+    if entry.is_dir {
+        return "Carpeta".to_string();
+    }
+    let extension = entry
+        .name
+        .rsplit_once('.')
+        .map(|(_, ext)| ext.to_ascii_lowercase())
+        .unwrap_or_default();
+    match extension.as_str() {
+        "txt" => "Documento de texto".to_string(),
+        "md" => "Documento Markdown".to_string(),
+        "pdf" => "Documento PDF".to_string(),
+        "ini" | "toml" | "yaml" | "yml" | "json" | "xml" => "Configuración".to_string(),
+        "lnk" => "Acceso directo".to_string(),
+        "exe" => "Aplicación".to_string(),
+        "dll" => "Biblioteca".to_string(),
+        "png" | "jpg" | "jpeg" | "gif" | "bmp" | "webp" | "svg" | "ico" => "Imagen".to_string(),
+        "mp4" | "mkv" | "avi" | "mov" | "webm" => "Vídeo".to_string(),
+        "mp3" | "wav" | "flac" | "ogg" | "m4a" => "Audio".to_string(),
+        "zip" | "rar" | "7z" | "tar" | "gz" | "iso" => "Archivo comprimido".to_string(),
+        "rs" | "js" | "ts" | "py" | "c" | "cpp" | "cs" | "java" | "go" | "html" | "css" | "sh"
+        | "ps1" => "Código fuente".to_string(),
+        "" => "Archivo".to_string(),
+        other => format!("Archivo .{other}"),
     }
 }
 
@@ -859,14 +888,41 @@ fn crumbs(path: &Path) -> Vec<Crumb> {
 }
 
 fn pinned_items() -> Vec<NavItem> {
-    raudo_core::known_folders()
+    let mut items: Vec<NavItem> = raudo_core::known_folders()
         .into_iter()
         .map(|folder| NavItem {
             label: folder.label.into(),
             path: path_text(&folder.path).into(),
             icon: icon_image("dir"),
         })
-        .collect()
+        .collect();
+
+    if let Some(home) = std::env::var_os("USERPROFILE").map(PathBuf::from) {
+        let projects = home.join("OneDrive").join("Escritorio").join("Proyectos");
+        if projects.is_dir() {
+            items.push(NavItem {
+                label: "Proyectos".into(),
+                path: path_text(&projects).into(),
+                icon: icon_image("dir"),
+            });
+        }
+        let icons = home.join("Iconos");
+        if icons.is_dir() {
+            items.push(NavItem {
+                label: "Iconos".into(),
+                path: path_text(&icons).into(),
+                icon: icon_image("dir"),
+            });
+        }
+    }
+
+    items.push(NavItem {
+        label: "Papelera de reciclaje".into(),
+        path: "C:\\$Recycle.Bin".into(),
+        icon: icon_image("dir"),
+    });
+
+    items
 }
 
 fn background_image() -> Option<slint::Image> {
